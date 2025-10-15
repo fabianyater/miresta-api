@@ -22,4 +22,10 @@ class ProductController {
     public ResponseEntity<List<ProductInfo>> getProducts() {
         return ResponseEntity.ok(productService.getProducts());
     }
+
+    @GetMapping("/category")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<ProductInfo>> getProductsByCategory() {
+        return ResponseEntity.ok(productService.getProductsByCategory());
+    }
 }

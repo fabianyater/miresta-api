@@ -21,6 +21,11 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
     private final CategoryRepository categoryRepository;
 
     @Override
+    public List<OrderItemSelection> getOrderItemSelectionByOrderItem(OrderItem orderItem) {
+        return orderItemSelectionsRepository.findOrderItemSelectionByOrderItem(orderItem);
+    }
+
+    @Override
     public void createOrderItemSelection(OrderItem orderItem, List<ProductWIthIdAndQuantity> item) {
         for (var it : item) {
             Product product = productService.getProductById(it.id());
@@ -77,6 +82,9 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
                 if (name.contains("personal")) return 3000L;
 
                 return 6000L;
+
+            case "envase":
+                return 1000L;
 
             default:
                 return 0L;

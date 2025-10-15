@@ -29,6 +29,8 @@ public class OrderItem {
     @JoinColumn(name = "order_type_id", nullable = false)
     private OrderType orderType;
 
+    private Long total;
+
     @OneToMany(mappedBy = "orderItem")
     private Set<OrderItemSelection> orderItemSelections = new LinkedHashSet<>();
 

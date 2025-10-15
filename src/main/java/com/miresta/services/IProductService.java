@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface IProductService {
     List<ProductInfo> getProducts();
+    List<ProductInfo> getProductsByCategory();
     Product getProductById(Long productId);
 }

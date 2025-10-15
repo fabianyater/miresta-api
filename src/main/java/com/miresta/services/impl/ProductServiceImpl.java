@@ -20,6 +20,11 @@ public class ProductServiceImpl implements IProductService {
     }
 
     @Override
+    public List<ProductInfo> getProductsByCategory() {
+        return productEntityRepository.findAllByCategoryName("Bebidas");
+    }
+
+    @Override
     public Product getProductById(Long productId) {
         return productEntityRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
