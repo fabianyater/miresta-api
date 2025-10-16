@@ -57,14 +57,10 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
             case "sopa":
                 return 5000L;
 
-            case "principios":
+            case "principios", "adicionales", "envase":
                 return 1000L;
 
             case "proteinas":
-                if (name.startsWith("huevo") || name.startsWith("huevos")) {
-                    return 1000L;
-                }
-
                 return 4000L;
 
             case "acompanantes":
@@ -82,9 +78,6 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
                 if (name.contains("personal")) return 3000L;
 
                 return 6000L;
-
-            case "envase":
-                return 1000L;
 
             default:
                 return 0L;

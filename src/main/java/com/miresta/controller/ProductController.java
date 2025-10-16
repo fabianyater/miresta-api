@@ -28,4 +28,10 @@ class ProductController {
     public ResponseEntity<List<ProductInfo>> getProductsByCategory() {
         return ResponseEntity.ok(productService.getProductsByCategory());
     }
+
+    @GetMapping("/common")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<ProductInfo>> getAdditionalCommonProducts() {
+        return ResponseEntity.ok(productService.getAdditionalCommonProducts());
+    }
 }

@@ -25,6 +25,12 @@ public class ProductServiceImpl implements IProductService {
     }
 
     @Override
+    public List<ProductInfo> getAdditionalCommonProducts() {
+        String[] commonProducts = {"Huevo cocido", "Huevo frito", "Huevos revueltos"};
+        return productEntityRepository.findAllByNameIn(List.of(commonProducts), "Adicionales");
+    }
+
+    @Override
     public Product getProductById(Long productId) {
         return productEntityRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));

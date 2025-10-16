@@ -8,5 +8,6 @@ import java.util.List;
 public interface IProductService {
     List<ProductInfo> getProducts();
     List<ProductInfo> getProductsByCategory();
+    List<ProductInfo> getAdditionalCommonProducts();
     Product getProductById(Long productId);
 }
