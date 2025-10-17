@@ -63,7 +63,6 @@ public class OrderItemServiceImpl implements IOrderItemService {
 
         // Créditos para calificar combo
         long soupCredits = 0, principleCredits = 0, sideCredits = 0;
-        // Proteínas por tipo
         Map<String, Long> proteinsByType = new HashMap<>();
 
         // Acumulados monetarios
@@ -88,7 +87,10 @@ public class OrderItemServiceImpl implements IOrderItemService {
             String prod = normalize(s.getProduct().getName());
             boolean isEgg = prod.startsWith("huevo");
 
-            // 1) Créditos base por categoría
+            // ⚠️ Calcular el replacement ANTES del switch de categoría
+            ComboCat rep = resolveReplacement(s);
+
+            // 1) Créditos base por categoría + cobros unitarios
             switch (cat) {
                 case "sopa" -> {
                     // Si quieres que "huevo en sopa" NO cuente como sopa real,
@@ -112,9 +114,16 @@ public class OrderItemServiceImpl implements IOrderItemService {
                     proteinsByType.put(pType, proteinsByType.getOrDefault(pType, 0L) + qty);
                 }
                 case "adicionales" -> {
-                    // Cobro standard adicional (1.000 c/u)
-                    additionalsTotal += 1_000L * qty;
-                    if (isEgg) eggAdditionals += qty;
+                    // --- AJUSTE CLAVE ---
+                    // Si este adicional viene marcado como "proteína", NO se cobra como adicional.
+                    if (rep == ComboCat.PROTEINAS) {
+                        // No sumar additionalsTotal; se contará como proteína en el bloque de replacements.
+                        // (Opcional: si quieres que "huevo por sopa/acompanante" tampoco cobre adicional, añade aquí rep==SOPA/ACOMPANANTES).
+                    } else {
+                        // Cobro standard adicional (1.000 c/u)
+                        additionalsTotal += 1_000L * qty;
+                        if (isEgg) eggAdditionals += qty; // Necesario para exención del 1er huevo como PRINCIPIO
+                    }
                 }
                 case "bebidas" -> {
                     long pricePerUnit = individualsUnitPrice(cat, prod);
@@ -126,8 +135,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
                 default -> {}
             }
 
-            // 2) Reemplazos declarados (UI o Catálogo) — seguros con reflection
-            ComboCat rep = resolveReplacement(s);
+            // 2) Aplicar créditos por reemplazos declarados
             if (rep != null) {
                 switch (rep) {
                     case SOPA -> {
@@ -156,7 +164,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
         if ("ALMUERZO".equalsIgnoreCase(mealType)) {
             boolean hasBasicCombo = totalProteins >= 1 && sideCredits >= SIDES;
             boolean full = (effectiveSoupCredits >= 1) && hasBasicCombo;
-            boolean tray = (effectiveSoupCredits == 0) && hasBasicCombo;
+             boolean tray = (effectiveSoupCredits == 0) && hasBasicCombo;
 
             basePrice = full ? BASE_FULL_PRICE_LUNCH : (tray ? BASE_TRAY_PRICE_LUNCH : 0L);
         } else if ("DESAYUNO".equalsIgnoreCase(mealType)) {
@@ -237,8 +245,6 @@ public class OrderItemServiceImpl implements IOrderItemService {
                 return 1_000L;
             }
             case "proteinas" -> {
-                // Hoy huevo también 4.000 (igual a otras proteínas)
-                if (productName.startsWith("huevo")) return 4_000L;
                 return 4_000L;
             }
             case "acompanantes" -> {
