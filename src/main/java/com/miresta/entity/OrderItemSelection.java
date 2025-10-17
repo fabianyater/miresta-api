@@ -27,4 +27,6 @@ public class OrderItemSelection {
 
     @Column(name = "unit_extra_price")
     private Long unitExtraPrice;
+
+    private String replacementForCategory;
 }

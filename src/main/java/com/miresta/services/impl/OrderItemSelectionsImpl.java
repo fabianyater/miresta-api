@@ -41,6 +41,7 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
             orderItemSelection.setProduct(product);
             orderItemSelection.setQuantity(it.quantity());
             orderItemSelection.setUnitExtraPrice(resolveUnitExtraPrice(orderItemSelection, category, product));
+            orderItemSelection.setReplacementForCategory(it.replacement());
 
             orderItemSelectionsRepository.save(orderItemSelection);
         }
