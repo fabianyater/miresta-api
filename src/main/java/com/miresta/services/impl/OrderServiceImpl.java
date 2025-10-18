@@ -51,7 +51,7 @@ public class OrderServiceImpl implements IOrderService {
 
 
         orderRequest.orders().forEach(o -> {
-            OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo());
+            OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
             orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
             orderItemService.updateTotalPrice(orderItem);
 

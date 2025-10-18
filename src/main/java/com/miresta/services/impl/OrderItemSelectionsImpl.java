@@ -65,9 +65,7 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
                 return 4000L;
 
             case "acompanantes":
-                if (name.contains("maduro")) return 0L;
-                if (name.contains("ensalada")) return 1000L;
-                if (name.contains("arroz")) return 1000L;
+                if (!name.contains("ensalada") && !name.contains("arroz")) return 0L;
 
                 return 1000L;
 

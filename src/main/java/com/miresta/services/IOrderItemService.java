@@ -6,7 +6,7 @@ import com.miresta.entity.OrderItem;
 import java.util.List;
 
 public interface IOrderItemService {
-    OrderItem createOrderItem(Order order, Long menuId, String mealType, Boolean isToGo);
+    OrderItem createOrderItem(Order order, Long menuId, String mealType, Boolean isToGo, String comments);
     List<OrderItem> getOrderItemsByOrder(Order order);
     void updateTotalPrice(OrderItem orderItem);
 }

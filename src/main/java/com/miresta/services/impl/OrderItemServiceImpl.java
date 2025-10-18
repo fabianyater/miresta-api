@@ -37,7 +37,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
     // ====== API principal ======
 
     @Override
-    public OrderItem createOrderItem(Order order, Long menuId, String mealType, Boolean isToGo) {
+    public OrderItem createOrderItem(Order order, Long menuId, String mealType, Boolean isToGo, String comments) {
         String getOrderTypeName = Boolean.TRUE.equals(isToGo) ? "OUT" : "IN";
         OrderType orderType = orderTypeRepository.findByName(getOrderTypeName)
                 .orElseThrow(() -> new RuntimeException("Order type not found: " + getOrderTypeName));
@@ -48,6 +48,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
         orderItem.setOrder(order);
         orderItem.setMenuService(menuService);
         orderItem.setOrderType(orderType);
+        orderItem.setComments(comments);
 
         return orderItemRepository.save(orderItem);
     }
@@ -61,40 +62,40 @@ public class OrderItemServiceImpl implements IOrderItemService {
     public void updateTotalPrice(OrderItem oi) {
         List<OrderItemSelection> selections = orderItemSelectionsService.getOrderItemSelectionByOrderItem(oi);
 
-        // Créditos para calificar combo
         long soupCredits = 0, principleCredits = 0, sideCredits = 0;
         Map<String, Long> proteinsByType = new HashMap<>();
 
-        // Acumulados monetarios
         long extrasTotal = 0L;
         long drinksTotal = 0L;
         long additionalsTotal = 0L;
 
-        // Bandera para exención del primer huevo cuando reemplaza principio
         boolean hasNonEggPrinciple = false;
         long eggAdditionals = 0L;
 
-        // Para distinguir "sopa real" (categoría Sopa) de "sopa por reemplazo"
         long soupCreditsFromRealSoup = 0L;
         long soupCreditsFromReplacement = 0L;
 
         for (OrderItemSelection s : selections) {
             long qty = s.getQuantity() != null ? s.getQuantity() : 1;
             long extraPrice = s.getUnitExtraPrice() != null ? s.getUnitExtraPrice() : 0L;
-            if (extraPrice > 0) extrasTotal += extraPrice;
 
             String cat  = normalize(s.getProduct().getCategory().getName());
             String prod = normalize(s.getProduct().getName());
             boolean isEgg = prod.startsWith("huevo");
 
-            // ⚠️ Calcular el replacement ANTES del switch de categoría
+            // 1) Resolver replacement ANTES
             ComboCat rep = resolveReplacement(s);
 
-            // 1) Créditos base por categoría + cobros unitarios
+            // 2) SUMAR extraPrice SOLO si aplica (nunca para proteínas/acts-as-proteínas)
+            //    OJO: si tu front estuviera enviando unit_extra_price por unidad, cambia a (extraPrice * qty).
+            boolean isProteinLine = "proteinas".equals(cat) || rep == ComboCat.PROTEINAS;
+            if (extraPrice > 0 && !isProteinLine) {
+                extrasTotal += extraPrice;
+            }
+
+            // 3) Créditos + cobros por categoría
             switch (cat) {
                 case "sopa" -> {
-                    // Si quieres que "huevo en sopa" NO cuente como sopa real,
-                    // podrías condicionar aquí con isEgg. Por defecto, cuenta.
                     soupCredits += qty;
                     soupCreditsFromRealSoup += qty;
                 }
@@ -103,8 +104,13 @@ public class OrderItemServiceImpl implements IOrderItemService {
                     if (!isEgg) hasNonEggPrinciple = true;
                 }
                 case "acompanantes" -> {
-                    sideCredits += qty;
-                    // Regla existente: huevo en acompañante también suma proteína
+                    // Solo ensalada y arroz se cuentan una vez (máximo 1 crédito)
+                    if (!prod.contains("ensalada") && !prod.contains("arroz")) {
+                        sideCredits += 1; // Siempre suma 1, independientemente de qty
+                    } else {
+                        sideCredits += qty; // Otros acompañantes se acumulan normalmente
+                    }
+                    
                     if (isEgg) {
                         proteinsByType.put("huevo", proteinsByType.getOrDefault("huevo", 0L) + qty);
                     }
@@ -114,15 +120,13 @@ public class OrderItemServiceImpl implements IOrderItemService {
                     proteinsByType.put(pType, proteinsByType.getOrDefault(pType, 0L) + qty);
                 }
                 case "adicionales" -> {
-                    // --- AJUSTE CLAVE ---
-                    // Si este adicional viene marcado como "proteína", NO se cobra como adicional.
+                    // Si este adicional actúa como PROTEÍNA, NO lo cobres como adicional
                     if (rep == ComboCat.PROTEINAS) {
-                        // No sumar additionalsTotal; se contará como proteína en el bloque de replacements.
-                        // (Opcional: si quieres que "huevo por sopa/acompanante" tampoco cobre adicional, añade aquí rep==SOPA/ACOMPANANTES).
+                        // nada: se contará abajo como proteína por replacement
                     } else {
-                        // Cobro standard adicional (1.000 c/u)
+                        // Cobro standard de adicionales
                         additionalsTotal += 1_000L * qty;
-                        if (isEgg) eggAdditionals += qty; // Necesario para exención del 1er huevo como PRINCIPIO
+                        if (isEgg) eggAdditionals += qty; // para exención si actúa como PRINCIPIO
                     }
                 }
                 case "bebidas" -> {
@@ -130,12 +134,12 @@ public class OrderItemServiceImpl implements IOrderItemService {
                     drinksTotal += pricePerUnit * qty;
                 }
                 case "especiales" -> {
-                    // Se cobrará en individuales si no califica combo
+                    // individuales si no califica combo
                 }
                 default -> {}
             }
 
-            // 2) Aplicar créditos por reemplazos declarados
+            // 4) Créditos por replacement
             if (rep != null) {
                 switch (rep) {
                     case SOPA -> {
@@ -154,7 +158,6 @@ public class OrderItemServiceImpl implements IOrderItemService {
 
         long totalProteins = proteinsByType.values().stream().mapToLong(Long::longValue).sum();
 
-        // 3) Calcular base price (full / bandeja / ninguno)
         String mealType = oi.getMenuService().getFoodType().getName();
         long basePrice = 0L;
 
@@ -164,8 +167,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
         if ("ALMUERZO".equalsIgnoreCase(mealType)) {
             boolean hasBasicCombo = totalProteins >= 1 && sideCredits >= SIDES;
             boolean full = (effectiveSoupCredits >= 1) && hasBasicCombo;
-             boolean tray = (effectiveSoupCredits == 0) && hasBasicCombo;
-
+            boolean tray = (effectiveSoupCredits == 0) && hasBasicCombo;
             basePrice = full ? BASE_FULL_PRICE_LUNCH : (tray ? BASE_TRAY_PRICE_LUNCH : 0L);
         } else if ("DESAYUNO".equalsIgnoreCase(mealType)) {
             boolean full = (effectiveSoupCredits >= 1) && totalProteins >= 1 && sideCredits >= 2;
@@ -176,12 +178,11 @@ public class OrderItemServiceImpl implements IOrderItemService {
         long toGo = "OUT".equals(oi.getOrderType().getName()) ? TOGO_PRICE : 0L;
 
         if (basePrice > 0) {
-            // 4) Exención del 1er huevo cuando reemplaza PRINCIPIO y no hubo principio no-huevo
+            // Exención: primer huevo usado como PRINCIPIO (si no hubo principio no-huevo)
             if (!hasNonEggPrinciple && eggAdditionals > 0 && additionalsTotal > 0) {
                 additionalsTotal = Math.max(0L, additionalsTotal - 1_000L);
             }
 
-            // 5) Proteínas adicionales
             long proteinAdditionals = totalProteins > 1 ? calculateProteinAdditionals(proteinsByType) : 0L;
 
             long total = basePrice + extrasTotal + drinksTotal + toGo + proteinAdditionals + additionalsTotal;
@@ -190,7 +191,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
             return;
         }
 
-        // 6) Si no calificó combo/bandeja: cobro individual
+        // No combo: individuales
         long individuals = 0L;
         for (OrderItemSelection s : selections) {
             long qty = s.getQuantity() != null ? s.getQuantity() : 1;
@@ -207,6 +208,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
         oi.setTotal(total);
         orderItemRepository.save(oi);
     }
+
 
     // ====== Helpers de negocio ======
 
@@ -248,7 +250,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
                 return 4_000L;
             }
             case "acompanantes" -> {
-                if (productName.contains("maduro")) return 0L;
+                if (!productName.contains("ensalada") && !productName.contains("arroz")) return 0L;
                 return 1_000L;
             }
             case "especiales" -> {
