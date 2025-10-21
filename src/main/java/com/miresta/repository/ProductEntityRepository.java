@@ -2,6 +2,7 @@ package com.miresta.repository;
 
 import com.miresta.entity.Product;
 import com.miresta.repository.projections.ProductInfo;
+import com.miresta.repository.projections.ProductWithDetails;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -13,8 +14,13 @@ public interface ProductEntityRepository extends JpaRepository<Product, Long> {
     @Query("select p from Product p join p.category c")
     List<ProductInfo> findAllProductsWithCategory();
 
-    List<ProductInfo> findAllByCategoryName(String categoryName);
+    @Query("select p from Product p join p.category c left join p.productDetails pd")
+    List<ProductWithDetails> findAllProductsWithDetails();
+
+    @Query("select p from Product p join p.category c left join p.productDetails pd where p.category.name = ?1")
+    List<ProductWithDetails> findAllByCategoryName(String categoryName);
 
     @Query("select p from Product p where p.name in ?1 and p.category.name = ?2")
     List<ProductInfo> findAllByNameIn(Collection<String> names, String categoryName);
+
 }
