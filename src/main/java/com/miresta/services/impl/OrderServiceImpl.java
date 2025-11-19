@@ -1,19 +1,18 @@
 package com.miresta.services.impl;
 
-import com.miresta.dto.CreateOrderRequest;
-import com.miresta.entity.DiningTable;
-import com.miresta.entity.Order;
-import com.miresta.entity.OrderItem;
-import com.miresta.entity.OrderItemSelection;
+import com.miresta.dto.*;
+import com.miresta.entity.*;
 import com.miresta.repository.DiningRepository;
 import com.miresta.repository.OrderRepository;
 import com.miresta.repository.OrderStatusRepository;
 import com.miresta.services.IOrderService;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -59,6 +58,130 @@ public class OrderServiceImpl implements IOrderService {
 
         calculateTotals(savedOrder);
         orderRepository.save(savedOrder);
+    }
+
+    @Override
+    public List<OrderDetailResponse> getOrders() {
+        return orderRepository.findAll().stream()
+                .map(order -> new OrderDetailResponse(
+                        order.getId(),
+                        order.getCreatedAt(),
+                        order.getNotes(),
+                        order.getSubtotal(),
+                        order.getTotal(),
+                        mapDiningTable(order.getDiningTable()),
+                        mapOrderStatus(order.getOrderStatus()),
+                        order.getOrderItems().stream()
+                                .map(this::mapOrderItem)
+                                .toList()
+                ))
+                .sorted(Comparator.comparing(OrderDetailResponse::createdAt))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public OrderDetailResponse getOrderDetail(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Orden no encontrada con id: " + orderId));
+
+        return new OrderDetailResponse(
+                order.getId(),
+                order.getCreatedAt(),
+                order.getNotes(),
+                order.getSubtotal(),
+                order.getTotal(),
+                mapDiningTable(order.getDiningTable()),
+                mapOrderStatus(order.getOrderStatus()),
+                order.getOrderItems().stream()
+                        .map(this::mapOrderItem)
+                        .toList()
+        );
+    }
+
+    private DiningTableDto mapDiningTable(DiningTable diningTable) {
+        if (diningTable == null) {
+            return null;
+        }
+        return new DiningTableDto(
+                diningTable.getId(),
+                diningTable.getNumber(),
+                diningTable.getStatus() != null ? diningTable.getStatus().getName() : null
+        );
+    }
+
+    private OrderStatusDto mapOrderStatus(OrderStatus orderStatus) {
+        return new OrderStatusDto(
+                orderStatus.getId(),
+                orderStatus.getName()
+        );
+    }
+
+    private OrderItemDto mapOrderItem(OrderItem orderItem) {
+        var groupedSelections = orderItem.getOrderItemSelections().stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        selection -> selection.getProduct().getCategory() != null
+                                ? selection.getProduct().getCategory().getName()
+                                : "Sin categoría"
+                ));
+
+        List<GroupedOrderItemDto> itemsByCategory = groupedSelections.entrySet().stream()
+                .map(entry -> new GroupedOrderItemDto(
+                        entry.getKey(),
+                        entry.getValue().stream()
+                                .map(selection -> new OrderItemProductDto(
+                                        selection.getProduct().getId(),
+                                        selection.getProduct().getName(),
+                                        selection.getQuantity(),
+                                        selection.getUnitExtraPrice(),
+                                        selection.getReplacementForCategory()
+                                ))
+                                .toList()
+                ))
+                .toList();
+
+        return new OrderItemDto(
+                orderItem.getId(),
+                orderItem.getComments(),
+                orderItem.getTotal(),
+                mapMenuService(orderItem.getMenuService()),
+                mapOrderType(orderItem.getOrderType()),
+                itemsByCategory
+        );
+
+    }
+
+    private MenuServiceDto mapMenuService(MenuService menuService) {
+        return new MenuServiceDto(
+                menuService.getId(),
+                menuService.getMenu() != null ? menuService.getMenu().getDate() : null,
+                menuService.getFoodType() != null ? menuService.getFoodType().getName() : null
+        );
+    }
+
+    private OrderTypeDto mapOrderType(OrderType orderType) {
+        return new OrderTypeDto(
+                orderType.getId(),
+                orderType.getName()
+        );
+    }
+
+    private OrderItemSelectionDto mapOrderItemSelection(OrderItemSelection selection) {
+        return new OrderItemSelectionDto(
+                selection.getId(),
+                selection.getQuantity(),
+                selection.getUnitExtraPrice(),
+                selection.getReplacementForCategory(),
+                mapProduct(selection.getProduct())
+        );
+    }
+
+    private ProductResponse mapProduct(Product product) {
+        return new ProductResponse(
+                product.getId(),
+                product.getName(),
+                product.getCategory() != null ? () -> product.getCategory().getName() : null
+        );
     }
 
     private void calculateTotals(Order order) {
