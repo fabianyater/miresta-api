@@ -11,5 +11,5 @@ public record OrderDetailResponse(
         Long total,
         DiningTableDto diningTable,
         OrderStatusDto orderStatus,
-        List<OrderItemDto> orderItems) {
+        OrderTypeDto orderType) {
 }

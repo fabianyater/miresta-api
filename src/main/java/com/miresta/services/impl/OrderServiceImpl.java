@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 @Service
@@ -36,28 +37,39 @@ public class OrderServiceImpl implements IOrderService {
     @Transactional
     @Override
     public void createOrder(CreateOrderRequest orderRequest) {
-        DiningTable diningTable = diningRepository.findById(orderRequest.tableId())
-                .orElseThrow(() -> new RuntimeException("Dining table not found: " + orderRequest.tableId()));
-        tableService.updateTableStatus(diningTable, "IN_USE");
+        DiningTable diningTable;
 
-        Order order = new Order();
+        if (orderRequest.tableId() != null) {
+            diningTable = diningRepository.findById(orderRequest.tableId())
+                    .orElseThrow(() -> new RuntimeException("Dining table not found: " + orderRequest.tableId()));
 
-        order.setCreatedAt(Instant.now());
-        order.setDiningTable(diningTable);
-        order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
+            Optional<Order> existingOrder = orderRepository.findByDiningTable_IdAndDiningTable_Status_Name(
+                    orderRequest.tableId(), "IN_USE");
 
-        Order savedOrder = orderRepository.save(order);
+            Order savedOrder;
 
+            if (existingOrder.isPresent()) {
+                savedOrder = existingOrder.get();
+            } else {
+                tableService.updateTableStatus(diningTable, "IN_USE");
 
-        orderRequest.orders().forEach(o -> {
-            OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
-            orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
-            orderItemService.updateTotalPrice(orderItem);
+                Order order = new Order();
+                order.setCreatedAt(Instant.now());
+                order.setDiningTable(diningTable);
+                order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
 
-        });
+                savedOrder = orderRepository.save(order);
+            }
 
-        calculateTotals(savedOrder);
-        orderRepository.save(savedOrder);
+            orderRequest.orders().forEach(o -> {
+                OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
+                orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
+                orderItemService.updateTotalPrice(orderItem);
+            });
+
+            calculateTotals(savedOrder);
+            orderRepository.save(savedOrder);
+        }
     }
 
     @Override
@@ -71,9 +83,9 @@ public class OrderServiceImpl implements IOrderService {
                         order.getTotal(),
                         mapDiningTable(order.getDiningTable()),
                         mapOrderStatus(order.getOrderStatus()),
-                        order.getOrderItems().stream()
-                                .map(this::mapOrderItem)
-                                .toList()
+                        order.getOrderItems() != null && !order.getOrderItems().isEmpty()
+                                ? mapOrderType(order.getOrderItems().iterator().next().getOrderType())
+                                : null
                 ))
                 .sorted(Comparator.comparing(OrderDetailResponse::createdAt))
                 .toList();
@@ -93,9 +105,9 @@ public class OrderServiceImpl implements IOrderService {
                 order.getTotal(),
                 mapDiningTable(order.getDiningTable()),
                 mapOrderStatus(order.getOrderStatus()),
-                order.getOrderItems().stream()
-                        .map(this::mapOrderItem)
-                        .toList()
+                order.getOrderItems() != null && !order.getOrderItems().isEmpty()
+                        ? mapOrderType(order.getOrderItems().iterator().next().getOrderType())
+                        : null
         );
     }
 
