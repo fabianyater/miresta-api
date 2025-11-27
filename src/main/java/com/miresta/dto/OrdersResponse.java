@@ -1,15 +1,13 @@
 package com.miresta.dto;
 
 import java.time.Instant;
-import java.util.List;
 
-public record OrderDetailResponse(
+public record OrdersResponse(
         Long id,
         Instant createdAt,
         String notes,
         Long subtotal,
         Long total,
         DiningTableDto diningTable,
-        OrderStatusDto orderStatus,
-        OrderTypeDto orderType) {
+        OrderStatusDto orderStatus) {
 }

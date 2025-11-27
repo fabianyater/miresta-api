@@ -1,12 +1,13 @@
 package com.miresta.services;
 
 import com.miresta.dto.CreateOrderRequest;
-import com.miresta.dto.OrderDetailResponse;
+import com.miresta.dto.OrderDetailsResponse;
+import com.miresta.dto.OrdersResponse;
 
 import java.util.List;
 
 public interface IOrderService {
     void createOrder(CreateOrderRequest orderRequest);
-    List<OrderDetailResponse> getOrders();
-    OrderDetailResponse getOrderDetail(Long orderId);
+    List<OrdersResponse> getOrders();
+    OrderDetailsResponse getOrderDetail(Long orderId);
 }

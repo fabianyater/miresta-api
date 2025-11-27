@@ -73,31 +73,28 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
-    public List<OrderDetailResponse> getOrders() {
+    public List<OrdersResponse> getOrders() {
         return orderRepository.findAll().stream()
-                .map(order -> new OrderDetailResponse(
+                .map(order -> new OrdersResponse(
                         order.getId(),
                         order.getCreatedAt(),
                         order.getNotes(),
                         order.getSubtotal(),
                         order.getTotal(),
                         mapDiningTable(order.getDiningTable()),
-                        mapOrderStatus(order.getOrderStatus()),
-                        order.getOrderItems() != null && !order.getOrderItems().isEmpty()
-                                ? mapOrderType(order.getOrderItems().iterator().next().getOrderType())
-                                : null
+                        mapOrderStatus(order.getOrderStatus())
                 ))
-                .sorted(Comparator.comparing(OrderDetailResponse::createdAt))
+                .sorted(Comparator.comparing(OrdersResponse::createdAt))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     @Override
-    public OrderDetailResponse getOrderDetail(Long orderId) {
+    public OrderDetailsResponse getOrderDetail(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Orden no encontrada con id: " + orderId));
 
-        return new OrderDetailResponse(
+        return new OrderDetailsResponse(
                 order.getId(),
                 order.getCreatedAt(),
                 order.getNotes(),
@@ -105,9 +102,9 @@ public class OrderServiceImpl implements IOrderService {
                 order.getTotal(),
                 mapDiningTable(order.getDiningTable()),
                 mapOrderStatus(order.getOrderStatus()),
-                order.getOrderItems() != null && !order.getOrderItems().isEmpty()
-                        ? mapOrderType(order.getOrderItems().iterator().next().getOrderType())
-                        : null
+                order.getOrderItems().stream()
+                        .map(this::mapOrderItem)
+                        .toList()
         );
     }
 
