@@ -1,4 +1,4 @@
-package com.miresta.dto;
+package com.miresta.dto.response;
 
 import com.miresta.repository.projections.ProductInfo;
 

@@ -1,4 +1,4 @@
-package com.miresta.dto;
+package com.miresta.dto.response;
 
 import java.io.Serializable;
 import java.time.LocalDate;

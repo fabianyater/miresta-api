@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -32,6 +33,7 @@ public class OrderItem {
 
     private String comments;
 
+    private Long baseTotal;
     private Long total;
 
     @OneToMany(mappedBy = "orderItem")

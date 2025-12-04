@@ -1,6 +1,7 @@
-package com.miresta.dto;
+package com.miresta.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.miresta.dto.response.ProductWIthIdAndQuantity;
 
 import java.io.Serializable;
 import java.time.LocalDate;

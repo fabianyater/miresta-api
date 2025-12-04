@@ -9,4 +9,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByDiningTable_IdAndOrderStatus_Name(Long tableId, String statusName);
 
     Optional<Order> findByDiningTable_IdAndDiningTable_Status_Name(Long id, String name);
+
+    Optional<Order> findByDiningTable_Id(Long id);
 }

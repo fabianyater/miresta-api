@@ -1,4 +1,4 @@
-package com.miresta.dto;
+package com.miresta.dto.response;
 
 import java.time.Instant;
 
@@ -8,6 +8,6 @@ public record OrdersResponse(
         String notes,
         Long subtotal,
         Long total,
-        DiningTableDto diningTable,
+        DiningTableResponse diningTable,
         OrderStatusDto orderStatus) {
 }

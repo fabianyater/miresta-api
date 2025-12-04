@@ -1,6 +1,6 @@
 package com.miresta.services.impl;
 
-import com.miresta.dto.TableEntityDto;
+import com.miresta.dto.response.TableEntityDto;
 import com.miresta.entity.DiningTable;
 import com.miresta.entity.DiningTableStatus;
 import com.miresta.repository.DiningTableStatusRepository;
@@ -28,13 +28,8 @@ public class TableServiceImpl implements ITableService {
     }
 
     @Override
-    public Integer getFreeTablesCount() {
-        return tableEntityRepository.countByStatus("OPEN");
-    }
-
-    @Override
-    public Integer getOccupiedTablesCount() {
-        return tableEntityRepository.countByStatus("IN_USE");
+    public Integer getTablesCounter(String status) {
+        return tableEntityRepository.countByStatus(status);
     }
 
     @Transactional

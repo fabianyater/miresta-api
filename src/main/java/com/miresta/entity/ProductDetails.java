@@ -17,6 +17,7 @@ public class ProductDetails {
 
     private LocalDate expirationDate;
     private Integer quantity;
+    private Long price;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "product_id")

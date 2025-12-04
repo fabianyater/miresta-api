@@ -1,6 +1,6 @@
-package com.miresta.dto;
+package com.miresta.dto.response;
 
-public record OrderItemSelectionDto(
+public record OrderItemSelectionResponse(
         Long id,
         Long quantity,
         Long unitExtraPrice,

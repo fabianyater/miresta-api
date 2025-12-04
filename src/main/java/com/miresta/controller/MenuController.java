@@ -1,7 +1,7 @@
 package com.miresta.controller;
 
-import com.miresta.dto.CreateMenuRequest;
-import com.miresta.dto.MenuResponse;
+import com.miresta.dto.request.CreateMenuRequest;
+import com.miresta.dto.response.MenuResponse;
 import com.miresta.services.impl.MenuServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;

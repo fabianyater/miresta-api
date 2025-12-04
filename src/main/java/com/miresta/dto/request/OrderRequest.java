@@ -1,4 +1,6 @@
-package com.miresta.dto;
+package com.miresta.dto.request;
+
+import com.miresta.dto.response.ProductWIthIdAndQuantity;
 
 import java.util.List;
 

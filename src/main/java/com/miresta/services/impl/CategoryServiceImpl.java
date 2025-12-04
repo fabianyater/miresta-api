@@ -1,6 +1,6 @@
 package com.miresta.services.impl;
 
-import com.miresta.dto.CategoryResponse;
+import com.miresta.dto.response.CategoryResponse;
 import com.miresta.entity.Category;
 import com.miresta.repository.CategoryRepository;
 import com.miresta.services.ICategoryService;

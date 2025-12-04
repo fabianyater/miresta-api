@@ -1,7 +1,7 @@
 package com.miresta.services;
 
-import com.miresta.dto.ProductDetailsDto;
-import com.miresta.dto.ProductRequest;
+import com.miresta.dto.response.ProductDetailsDto;
+import com.miresta.dto.request.ProductRequest;
 import com.miresta.entity.Product;
 import com.miresta.repository.projections.ProductInfo;
 import com.miresta.repository.projections.ProductWithDetails;

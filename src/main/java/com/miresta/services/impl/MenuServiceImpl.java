@@ -2,7 +2,10 @@ package com.miresta.services.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.miresta.dto.*;
+import com.miresta.dto.request.CreateMenuRequest;
+import com.miresta.dto.response.ItemResponse;
+import com.miresta.dto.response.MenuResponse;
+import com.miresta.dto.response.ProductDto;
 import com.miresta.entity.Menu;
 import com.miresta.entity.MenuService;
 import com.miresta.repository.MenuRepository;
@@ -62,25 +65,25 @@ public class MenuServiceImpl implements IMenuService {
             var key = e.getKey();
             var items = e.getValue().entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
-                    .map(en -> new ItemDto(
+                    .map(en -> new ItemResponse(
                             en.getKey(),
                             en.getValue().stream()
                                     .sorted(Comparator.comparing(ProductDto::name))
                                     .toList()))
                     .toList();
 
-            var menu = new MenuDto(
+            var menu = new MenuResponse(
                     key.id(),
                     key.d().toString(),
                     key.type(),
                     items
             );
-            out.add(new MenuResponse(menu));
+            out.add(menu);
         }
 
         out.sort(Comparator
-                .comparing((MenuResponse r) -> r.menu().date())
-                .thenComparing(r -> r.menu().type()));
+                .comparing(MenuResponse::date)
+                .thenComparing(MenuResponse::type));
 
         return out;
     }

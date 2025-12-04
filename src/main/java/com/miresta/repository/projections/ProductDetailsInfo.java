@@ -9,4 +9,5 @@ public interface ProductDetailsInfo {
     LocalDate getExpirationDate();
 
     Integer getQuantity();
+    Long getPrice();
 }

@@ -1,11 +1,10 @@
 package com.miresta.controller;
 
-import com.miresta.dto.CreateOrderRequest;
-import com.miresta.dto.OrderDetailsResponse;
-import com.miresta.dto.OrdersResponse;
+import com.miresta.dto.request.CreateOrderRequest;
+import com.miresta.dto.response.OrderDetailsResponse;
+import com.miresta.dto.response.OrdersResponse;
 import com.miresta.services.IOrderService;
 import lombok.RequiredArgsConstructor;
-import org.aspectj.weaver.ast.Or;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,8 +34,15 @@ public class OrderController {
     
     @GetMapping("/{orderId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<OrderDetailsResponse> getOrderDetail(@PathVariable Long orderId) {
+    public ResponseEntity<OrderDetailsResponse> getOrderDetails(@PathVariable Long orderId) {
         OrderDetailsResponse orderDetail = orderService.getOrderDetail(orderId);
+        return ResponseEntity.ok(orderDetail);
+    }
+
+    @GetMapping("/pending/{tableId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<OrderDetailsResponse> getPendingOrderDetails(@PathVariable Long tableId) {
+        OrderDetailsResponse orderDetail = orderService.getPendingOrderDetail(tableId);
         return ResponseEntity.ok(orderDetail);
     }
 }

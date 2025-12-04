@@ -1,6 +1,4 @@
-package com.miresta.dto;
-
-import com.miresta.entity.OrderItem;
+package com.miresta.dto.request;
 
 import java.util.List;
 

@@ -1,9 +1,7 @@
 package com.miresta.services;
 
-import com.miresta.dto.CreateMenuRequest;
-import com.miresta.dto.MenuResponse;
-import com.miresta.entity.MenuService;
-import com.miresta.repository.projections.MenuInfo;
+import com.miresta.dto.request.CreateMenuRequest;
+import com.miresta.dto.response.MenuResponse;
 
 import java.time.LocalDate;
 import java.util.List;

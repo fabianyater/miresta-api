@@ -1,6 +1,6 @@
 package com.miresta.services;
 
-import com.miresta.dto.CategoryResponse;
+import com.miresta.dto.response.CategoryResponse;
 import com.miresta.entity.Category;
 
 import java.util.List;

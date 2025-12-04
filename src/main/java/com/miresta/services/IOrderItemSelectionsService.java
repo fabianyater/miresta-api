@@ -1,6 +1,6 @@
 package com.miresta.services;
 
-import com.miresta.dto.ProductWIthIdAndQuantity;
+import com.miresta.dto.response.ProductWIthIdAndQuantity;
 import com.miresta.entity.OrderItem;
 import com.miresta.entity.OrderItemSelection;
 

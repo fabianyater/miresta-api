@@ -1,6 +1,7 @@
 package com.miresta.services.impl;
 
-import com.miresta.dto.*;
+import com.miresta.dto.request.CreateOrderRequest;
+import com.miresta.dto.response.*;
 import com.miresta.entity.*;
 import com.miresta.repository.DiningRepository;
 import com.miresta.repository.OrderRepository;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -84,7 +86,7 @@ public class OrderServiceImpl implements IOrderService {
                         mapDiningTable(order.getDiningTable()),
                         mapOrderStatus(order.getOrderStatus())
                 ))
-                .sorted(Comparator.comparing(OrdersResponse::createdAt))
+                .sorted(Comparator.comparing(OrdersResponse::createdAt).reversed())
                 .toList();
     }
 
@@ -103,16 +105,40 @@ public class OrderServiceImpl implements IOrderService {
                 mapDiningTable(order.getDiningTable()),
                 mapOrderStatus(order.getOrderStatus()),
                 order.getOrderItems().stream()
+                        .sorted(Comparator.comparing(OrderItem::getId).reversed())
                         .map(this::mapOrderItem)
                         .toList()
         );
     }
 
-    private DiningTableDto mapDiningTable(DiningTable diningTable) {
+    @Override
+    public OrderDetailsResponse getPendingOrderDetail(Long tableId) {
+        Order order = orderRepository.findByDiningTable_Id(tableId)
+                .orElse(null);
+
+        if (order == null) {
+            return null;
+        }
+
+        return new OrderDetailsResponse(
+                order.getId(),
+                order.getCreatedAt(),
+                order.getNotes(),
+                order.getSubtotal(),
+                order.getTotal(),
+                mapDiningTable(order.getDiningTable()),
+                mapOrderStatus(order.getOrderStatus()),
+                order.getOrderItems().stream()
+                        .map(this::mapOrderItem)
+                        .toList()
+        );
+    }
+
+    private DiningTableResponse mapDiningTable(DiningTable diningTable) {
         if (diningTable == null) {
             return null;
         }
-        return new DiningTableDto(
+        return new DiningTableResponse(
                 diningTable.getId(),
                 diningTable.getNumber(),
                 diningTable.getStatus() != null ? diningTable.getStatus().getName() : null
@@ -126,7 +152,7 @@ public class OrderServiceImpl implements IOrderService {
         );
     }
 
-    private OrderItemDto mapOrderItem(OrderItem orderItem) {
+    private OrderItemResponse mapOrderItem(OrderItem orderItem) {
         var groupedSelections = orderItem.getOrderItemSelections().stream()
                 .collect(java.util.stream.Collectors.groupingBy(
                         selection -> selection.getProduct().getCategory() != null
@@ -134,24 +160,31 @@ public class OrderServiceImpl implements IOrderService {
                                 : "Sin categoría"
                 ));
 
-        List<GroupedOrderItemDto> itemsByCategory = groupedSelections.entrySet().stream()
-                .map(entry -> new GroupedOrderItemDto(
+        List<GroupedOrderItemResponse> itemsByCategory = groupedSelections.entrySet().stream()
+                .map(entry -> new GroupedOrderItemResponse(
                         entry.getKey(),
                         entry.getValue().stream()
-                                .map(selection -> new OrderItemProductDto(
+                                .map(selection -> new OrderItemProductResponse(
                                         selection.getProduct().getId(),
                                         selection.getProduct().getName(),
                                         selection.getQuantity(),
                                         selection.getUnitExtraPrice(),
+                                        Optional.ofNullable(selection.getProduct().getProductDetails())
+                                                .map(details -> details.stream()
+                                                        .map(ProductDetails::getPrice)
+                                                        .filter(Objects::nonNull)
+                                                        .reduce(0L, Long::sum))
+                                                .orElse(0L),
                                         selection.getReplacementForCategory()
                                 ))
                                 .toList()
                 ))
                 .toList();
 
-        return new OrderItemDto(
+        return new OrderItemResponse(
                 orderItem.getId(),
                 orderItem.getComments(),
+                orderItem.getBaseTotal(),
                 orderItem.getTotal(),
                 mapMenuService(orderItem.getMenuService()),
                 mapOrderType(orderItem.getOrderType()),
@@ -160,8 +193,8 @@ public class OrderServiceImpl implements IOrderService {
 
     }
 
-    private MenuServiceDto mapMenuService(MenuService menuService) {
-        return new MenuServiceDto(
+    private MenuServiceResponse mapMenuService(MenuService menuService) {
+        return new MenuServiceResponse(
                 menuService.getId(),
                 menuService.getMenu() != null ? menuService.getMenu().getDate() : null,
                 menuService.getFoodType() != null ? menuService.getFoodType().getName() : null
@@ -175,8 +208,8 @@ public class OrderServiceImpl implements IOrderService {
         );
     }
 
-    private OrderItemSelectionDto mapOrderItemSelection(OrderItemSelection selection) {
-        return new OrderItemSelectionDto(
+    private OrderItemSelectionResponse mapOrderItemSelection(OrderItemSelection selection) {
+        return new OrderItemSelectionResponse(
                 selection.getId(),
                 selection.getQuantity(),
                 selection.getUnitExtraPrice(),

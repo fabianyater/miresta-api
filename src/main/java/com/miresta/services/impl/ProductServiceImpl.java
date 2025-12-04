@@ -1,11 +1,10 @@
 package com.miresta.services.impl;
 
-import com.miresta.dto.ProductDetailsDto;
-import com.miresta.dto.ProductRequest;
+import com.miresta.dto.response.ProductDetailsDto;
+import com.miresta.dto.request.ProductRequest;
 import com.miresta.entity.Category;
 import com.miresta.entity.Product;
 import com.miresta.entity.ProductDetails;
-import com.miresta.helpers.ProductHelper;
 import com.miresta.repository.ProductEntityRepository;
 import com.miresta.repository.projections.ProductInfo;
 import com.miresta.repository.projections.ProductWithDetails;
@@ -37,12 +36,13 @@ public class ProductServiceImpl implements IProductService {
 
         var savedProduct = productEntityRepository.save(product);
 
-        if (productRequest.expirationDate() != null && productRequest.quantity() != null) {
+        if (productRequest.expirationDate() != null && productRequest.quantity() != null && productRequest.unitPrice() > 0) {
             ProductDetails productDetails = new ProductDetails();
 
             productDetails.setProduct(savedProduct);
             productDetails.setQuantity(productRequest.quantity());
             productDetails.setExpirationDate(productRequest.expirationDate());
+            productDetails.setPrice(productRequest.unitPrice());
 
             productDetailsServiceImpl.createProductDetails(productDetails);
         }

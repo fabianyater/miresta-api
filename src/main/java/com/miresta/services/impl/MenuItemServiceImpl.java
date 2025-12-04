@@ -1,6 +1,6 @@
 package com.miresta.services.impl;
 
-import com.miresta.dto.ProductWIthIdAndQuantity;
+import com.miresta.dto.response.ProductWIthIdAndQuantity;
 import com.miresta.entity.MenuItem;
 import com.miresta.entity.MenuService;
 import com.miresta.entity.Product;
