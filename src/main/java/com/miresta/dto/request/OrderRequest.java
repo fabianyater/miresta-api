@@ -8,5 +8,6 @@ public record OrderRequest(List<ProductWIthIdAndQuantity> items,
                            String mealType,
                            Long menuId,
                            Boolean isToGo,
+                           Integer count,
                            String comments) {
 }

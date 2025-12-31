@@ -12,10 +12,10 @@ spring:
     hibernate:
       ddl-auto: update
   datasource:
-    driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://localhost:5432/miresta
     username: postgres
     password: postgres
+    driver-class-name: org.postgresql.Driver
 
 app:
   cors:

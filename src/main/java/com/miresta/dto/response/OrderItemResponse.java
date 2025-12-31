@@ -6,6 +6,7 @@ public record OrderItemResponse(
         Long id,
         String comments,
         Long baseTotal,
+        Long toGoTotal,
         Long total,
         MenuServiceResponse menuService,
         OrderTypeDto orderType,

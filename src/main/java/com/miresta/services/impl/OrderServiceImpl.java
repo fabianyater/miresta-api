@@ -45,8 +45,8 @@ public class OrderServiceImpl implements IOrderService {
             diningTable = diningRepository.findById(orderRequest.tableId())
                     .orElseThrow(() -> new RuntimeException("Dining table not found: " + orderRequest.tableId()));
 
-            Optional<Order> existingOrder = orderRepository.findByDiningTable_IdAndDiningTable_Status_Name(
-                    orderRequest.tableId(), "IN_USE");
+            Optional<Order> existingOrder = orderRepository.findByDiningTable_IdAndDiningTable_Status_NameAndOrderStatus_Name(
+                    orderRequest.tableId(), "IN_USE", "PENDING");
 
             Order savedOrder;
 
@@ -64,9 +64,33 @@ public class OrderServiceImpl implements IOrderService {
             }
 
             orderRequest.orders().forEach(o -> {
-                OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
-                orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
-                orderItemService.updateTotalPrice(orderItem);
+                int repetitions = (o.count() != null && o.count() > 0) ? o.count() : 1;
+
+                for (int i = 0; i < repetitions; i++) {
+                    OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
+                    orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
+                    orderItemService.updateTotalPrice(orderItem);
+                }
+            });
+
+            calculateTotals(savedOrder);
+            orderRepository.save(savedOrder);
+        } else {
+            Order order = new Order();
+            order.setCreatedAt(Instant.now());
+            order.setDiningTable(null);
+            order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
+
+            Order savedOrder = orderRepository.save(order);
+
+            orderRequest.orders().forEach(o -> {
+                int repetitions = (o.count() != null && o.count() > 0) ? o.count() : 1;
+
+                for (int i = 0; i < repetitions; i++) {
+                    OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
+                    orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
+                    orderItemService.updateTotalPrice(orderItem);
+                }
             });
 
             calculateTotals(savedOrder);
@@ -75,8 +99,8 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
-    public List<OrdersResponse> getOrders() {
-        return orderRepository.findAll().stream()
+    public List<OrdersResponse> getOrders(String status) {
+        return orderRepository.findByOrderStatus_Name(status).stream()
                 .map(order -> new OrdersResponse(
                         order.getId(),
                         order.getCreatedAt(),
@@ -113,7 +137,8 @@ public class OrderServiceImpl implements IOrderService {
 
     @Override
     public OrderDetailsResponse getPendingOrderDetail(Long tableId) {
-        Order order = orderRepository.findByDiningTable_Id(tableId)
+        Order order = orderRepository.findByDiningTable_IdAndDiningTable_Status_NameAndOrderStatus_Name(
+                        tableId, "IN_USE", "PENDING")
                 .orElse(null);
 
         if (order == null) {
@@ -132,6 +157,26 @@ public class OrderServiceImpl implements IOrderService {
                         .map(this::mapOrderItem)
                         .toList()
         );
+    }
+
+    @Transactional
+    @Override
+    public void updateOrderStatus(Long orderId, String status) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
+
+        OrderStatus newStatus = orderStatusRepository.findByName(status);
+        if (newStatus == null) {
+            throw new EntityNotFoundException("Order status not found: " + status);
+        }
+
+        order.setOrderStatus(newStatus);
+
+        orderRepository.save(order);
+
+        if ("COMPLETED".equalsIgnoreCase(status)) {
+            tableService.updateTableStatus(order.getDiningTable(), "OPEN");
+        }
     }
 
     private DiningTableResponse mapDiningTable(DiningTable diningTable) {
@@ -185,6 +230,7 @@ public class OrderServiceImpl implements IOrderService {
                 orderItem.getId(),
                 orderItem.getComments(),
                 orderItem.getBaseTotal(),
+                orderItem.getIsTogoPrice(),
                 orderItem.getTotal(),
                 mapMenuService(orderItem.getMenuService()),
                 mapOrderType(orderItem.getOrderType()),

@@ -1,6 +1,7 @@
 package com.miresta.controller;
 
 import com.miresta.dto.request.CreateOrderRequest;
+import com.miresta.dto.request.UpdateStatusRequest;
 import com.miresta.dto.response.OrderDetailsResponse;
 import com.miresta.dto.response.OrdersResponse;
 import com.miresta.services.IOrderService;
@@ -28,8 +29,10 @@ public class OrderController {
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<OrdersResponse>> getOrders() {
-        return ResponseEntity.ok(orderService.getOrders());
+    public ResponseEntity<List<OrdersResponse>> getOrders(
+            @RequestParam(value = "status", required = false) String status
+    ) {
+        return ResponseEntity.ok(orderService.getOrders(status));
     }
     
     @GetMapping("/{orderId}")
@@ -44,5 +47,15 @@ public class OrderController {
     public ResponseEntity<OrderDetailsResponse> getPendingOrderDetails(@PathVariable Long tableId) {
         OrderDetailsResponse orderDetail = orderService.getPendingOrderDetail(tableId);
         return ResponseEntity.ok(orderDetail);
+    }
+
+    @PatchMapping("/{orderId}/status")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> updateOrderStatus(
+            @RequestBody UpdateStatusRequest request,
+            @PathVariable Long orderId) {
+        orderService.updateOrderStatus(orderId, request.status());
+
+        return ResponseEntity.ok().build();
     }
 }

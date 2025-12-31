@@ -187,6 +187,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
 
             long total = basePrice + extrasTotal + drinksTotal + toGo + proteinAdditionals + additionalsTotal;
             oi.setTotal(total);
+            oi.setIsTogoPrice(toGo);
             oi.setBaseTotal(basePrice);
             orderItemRepository.save(oi);
             return;
@@ -207,6 +208,7 @@ public class OrderItemServiceImpl implements IOrderItemService {
 
         long total = individuals + drinksTotal + toGo;
         oi.setTotal(total);
+        oi.setIsTogoPrice(toGo);
         orderItemRepository.save(oi);
     }
 

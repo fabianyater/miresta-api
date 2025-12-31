@@ -35,6 +35,7 @@ public class OrderItem {
 
     private Long baseTotal;
     private Long total;
+    private Long isTogoPrice;
 
     @OneToMany(mappedBy = "orderItem")
     private Set<OrderItemSelection> orderItemSelections = new LinkedHashSet<>();
