@@ -2,6 +2,7 @@ package com.miresta.controller;
 
 import com.miresta.dto.response.TableEntityDto;
 import com.miresta.dto.response.TableStatusCounter;
+import com.miresta.dto.response.TableSummaryResponse;
 import com.miresta.services.impl.TableServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,16 +21,7 @@ class TableController {
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<TableEntityDto>> getTables() {
-        return ResponseEntity.ok(tableServiceImpl.getTables());
+    public ResponseEntity<TableSummaryResponse> getTablesInfo() {
+        return ResponseEntity.ok(tableServiceImpl.getTablesInfo());
     }
-
-    @GetMapping("/status-counter")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<TableStatusCounter> getTableStatusCounter() {
-        var freeTablesCounter = tableServiceImpl.getTablesCounter("OPEN");
-        var occupiedTablesCounter = tableServiceImpl.getTablesCounter("IN_USE");
-        return ResponseEntity.ok(new TableStatusCounter(freeTablesCounter, occupiedTablesCounter));
-    }
-
 }

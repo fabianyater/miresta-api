@@ -175,7 +175,9 @@ public class OrderServiceImpl implements IOrderService {
         orderRepository.save(order);
 
         if ("COMPLETED".equalsIgnoreCase(status)) {
-            tableService.updateTableStatus(order.getDiningTable(), "OPEN");
+            Optional.ofNullable(order.getDiningTable()).ifPresent(diningTable -> {
+                tableService.updateTableStatus(diningTable, "OPEN");
+            });
         }
     }
 

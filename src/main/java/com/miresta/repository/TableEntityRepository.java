@@ -16,7 +16,13 @@ public interface TableEntityRepository extends JpaRepository<DiningTable, Long> 
     """)
     List<TableEntityDto> findAllAsDto();
 
-    @Query("select count(t) from DiningTable t where t.status.name = :status")
-    Integer countByStatus(@Param("status") String status);
+    @Query("""
+        select\s
+            sum(case when s.name = 'OPEN' then 1 else 0 end),
+            sum(case when s.name = 'IN_USE' then 1 else 0 end)
+        from DiningTable t
+        join t.status s
+   \s""")
+    Object countAllStatuses();
 
 }

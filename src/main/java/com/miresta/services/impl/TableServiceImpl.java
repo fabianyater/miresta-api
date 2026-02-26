@@ -1,6 +1,7 @@
 package com.miresta.services.impl;
 
 import com.miresta.dto.response.TableEntityDto;
+import com.miresta.dto.response.TableSummaryResponse;
 import com.miresta.entity.DiningTable;
 import com.miresta.entity.DiningTableStatus;
 import com.miresta.repository.DiningTableStatusRepository;
@@ -20,16 +21,21 @@ public class TableServiceImpl implements ITableService {
     private final DiningTableStatusRepository diningTableStatusRepository;
 
     @Override
-    @Transactional(readOnly = true)
-    public List<TableEntityDto> getTables() {
-        return tableEntityRepository.findAllAsDto().stream().sorted(
-                Comparator.comparing(TableEntityDto::number)
-        ).toList();
-    }
+    public TableSummaryResponse getTablesInfo() {
+        List<TableEntityDto> tables = tableEntityRepository.findAllAsDto().stream()
+                .sorted(Comparator.comparing(TableEntityDto::number))
+                .toList();
+        Object result = tableEntityRepository.countAllStatuses();
 
-    @Override
-    public Integer getTablesCounter(String status) {
-        return tableEntityRepository.countByStatus(status);
+        long free = 0L;
+        long inUse = 0L;
+
+        if (result instanceof Object[] row) {
+            free = (row[0] != null) ? ((Number) row[0]).longValue() : 0L;
+            inUse = (row[1] != null) ? ((Number) row[1]).longValue() : 0L;
+        }
+
+        return new TableSummaryResponse(tables, free, inUse);
     }
 
     @Transactional
