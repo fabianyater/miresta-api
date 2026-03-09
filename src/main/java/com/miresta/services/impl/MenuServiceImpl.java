@@ -10,7 +10,9 @@ import com.miresta.entity.Menu;
 import com.miresta.entity.MenuService;
 import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.MenuRepository;
+import com.miresta.services.IMenuItemService;
 import com.miresta.services.IMenuService;
+import com.miresta.services.IMenuServicesService;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -28,10 +30,8 @@ record ProductRow(Long id, String name, Integer quantity) {
 @Slf4j
 public class MenuServiceImpl implements IMenuService {
     private final MenuRepository menuRepository;
-    private final FoodTypeServiceImpl foodTypeService;
-    private final ProductServiceImpl productService;
-    private final MenuItemServiceImpl menuItemService;
-    private final MenuServicesServiceImpl menuServicesService;
+    private final IMenuItemService menuItemService;
+    private final IMenuServicesService menuServicesService;
 
     private final ObjectMapper objectMapper;
 

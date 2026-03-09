@@ -2,7 +2,7 @@ package com.miresta.controller;
 
 import com.miresta.dto.request.CreateMenuRequest;
 import com.miresta.dto.response.MenuResponse;
-import com.miresta.services.impl.MenuServiceImpl;
+import com.miresta.services.IMenuService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +16,7 @@ import java.util.List;
 @RequestMapping("/api/v1/menus")
 @RequiredArgsConstructor
 public class MenuController {
-    private final MenuServiceImpl menuService;
+    private final IMenuService menuService;
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")

@@ -20,6 +20,9 @@ public class Product {
     @Column(name = "name", length = Integer.MAX_VALUE)
     private String name;
 
+    @Column(name = "acts_as_category", length = Integer.MAX_VALUE)
+    private String actsAsCategory;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;

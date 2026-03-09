@@ -2,9 +2,11 @@ package com.miresta.services.impl;
 
 import com.miresta.entity.*;
 import com.miresta.exception.ResourceNotFoundException;
-import com.miresta.repository.OderItemRepository;
+import com.miresta.repository.OrderItemRepository;
 import com.miresta.repository.OrderTypeRepository;
+import com.miresta.services.IMenuServicesService;
 import com.miresta.services.IOrderItemService;
+import com.miresta.services.IOrderItemSelectionsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,10 +33,10 @@ public class OrderItemServiceImpl implements IOrderItemService {
     // Recomendado: principio/arroz/huevo POR SOPA => Bandeja (false).
     private static final boolean REPLACEMENT_COUNTS_AS_REAL_SOUP = false;
 
-    private final OderItemRepository orderItemRepository;
-    private final MenuServicesServiceImpl menuServicesService;
+    private final OrderItemRepository orderItemRepository;
+    private final IMenuServicesService menuServicesService;
     private final OrderTypeRepository orderTypeRepository;
-    private final OrderItemSelectionsImpl orderItemSelectionsService;
+    private final IOrderItemSelectionsService orderItemSelectionsService;
 
     // ====== API principal ======
 
@@ -287,22 +289,25 @@ public class OrderItemServiceImpl implements IOrderItemService {
     private enum ComboCat { SOPA, PRINCIPIOS, PROTEINAS, ACOMPANANTES }
 
     /**
-     * Resuelve el reemplazo declarado en la selección:
-     * OrderItemSelection.getReplacementForCategory() -> "sopa|principios|proteinas|acompanantes"
+     * Resuelve el reemplazo declarado:
+     * 1) OrderItemSelection.getReplacementForCategory() -> "sopa|principios|proteinas|acompanantes"
+     * 2) Product.getActsAsCategory() (para políticas fijas en catálogo)
      */
     private ComboCat resolveReplacement(OrderItemSelection s) {
-        return parseComboCat(s.getReplacementForCategory());
+        ComboCat parsed = parseComboCat(s.getReplacementForCategory());
+        if (parsed != null) return parsed;
+        return parseComboCat(s.getProduct().getActsAsCategory());
     }
 
     private ComboCat parseComboCat(String raw) {
         if (raw == null || raw.isBlank()) return null;
         String v = normalize(raw);
-        switch (v) {
-            case "sopa":          return ComboCat.SOPA;
-            case "principios":    return ComboCat.PRINCIPIOS;
-            case "proteinas":     return ComboCat.PROTEINAS;
-            case "acompanantes":  return ComboCat.ACOMPANANTES;
-            default:              return null;
-        }
+        return switch (v) {
+            case "sopa"         -> ComboCat.SOPA;
+            case "principios"   -> ComboCat.PRINCIPIOS;
+            case "proteinas"    -> ComboCat.PROTEINAS;
+            case "acompanantes" -> ComboCat.ACOMPANANTES;
+            default             -> null;
+        };
     }
 }

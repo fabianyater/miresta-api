@@ -9,6 +9,7 @@ import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.CategoryRepository;
 import com.miresta.repository.OrderItemSelectionsRepository;
 import com.miresta.services.IOrderItemSelectionsService;
+import com.miresta.services.IProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +19,7 @@ import java.util.List;
 @Service
 public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
     private final OrderItemSelectionsRepository orderItemSelectionsRepository;
-    private final ProductServiceImpl productService;
+    private final IProductService productService;
     private final CategoryRepository categoryRepository;
 
     @Override

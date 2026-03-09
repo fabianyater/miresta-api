@@ -4,7 +4,7 @@ import com.miresta.dto.response.ProductDetailsDto;
 import com.miresta.dto.request.ProductRequest;
 import com.miresta.repository.projections.ProductInfo;
 import com.miresta.repository.projections.ProductWithDetails;
-import com.miresta.services.impl.ProductServiceImpl;
+import com.miresta.services.IProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,7 +17,7 @@ import java.util.List;
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
 public class ProductController {
-    private final ProductServiceImpl productService;
+    private final IProductService productService;
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")

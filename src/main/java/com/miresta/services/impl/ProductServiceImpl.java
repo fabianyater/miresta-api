@@ -9,6 +9,8 @@ import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.ProductEntityRepository;
 import com.miresta.repository.projections.ProductInfo;
 import com.miresta.repository.projections.ProductWithDetails;
+import com.miresta.services.ICategoryService;
+import com.miresta.services.IProductDetailsService;
 import com.miresta.services.IProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,8 +25,8 @@ import java.util.List;
 @Slf4j
 public class ProductServiceImpl implements IProductService {
     private final ProductEntityRepository productEntityRepository;
-    private final CategoryServiceImpl categoryServiceImpl;
-    private final ProductDetailsServiceImpl productDetailsServiceImpl;
+    private final ICategoryService categoryServiceImpl;
+    private final IProductDetailsService productDetailsServiceImpl;
 
     @Transactional
     @Override
