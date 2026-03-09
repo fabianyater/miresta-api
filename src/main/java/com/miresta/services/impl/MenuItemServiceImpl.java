@@ -1,6 +1,6 @@
 package com.miresta.services.impl;
 
-import com.miresta.dto.response.ProductWIthIdAndQuantity;
+import com.miresta.dto.response.ProductWithIdAndQuantity;
 import com.miresta.entity.MenuItem;
 import com.miresta.entity.MenuService;
 import com.miresta.entity.Product;
@@ -17,7 +17,7 @@ public class MenuItemServiceImpl implements IMenuItemService {
     private final MenuServicesServiceImpl menuServicesService;
 
     @Override
-    public void createMenuItem(MenuService menuService, ProductWIthIdAndQuantity productWIthIdAndQuantity) {
+    public void createMenuItem(MenuService menuService, ProductWithIdAndQuantity productWIthIdAndQuantity) {
         Product product = productService.getProductById(productWIthIdAndQuantity.id());
 
         MenuItem menuItem = new MenuItem();

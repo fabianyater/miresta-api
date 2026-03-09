@@ -8,6 +8,7 @@ import com.miresta.dto.response.MenuResponse;
 import com.miresta.dto.response.ProductDto;
 import com.miresta.entity.Menu;
 import com.miresta.entity.MenuService;
+import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.MenuRepository;
 import com.miresta.services.IMenuService;
 import lombok.RequiredArgsConstructor;
@@ -108,7 +109,7 @@ public class MenuServiceImpl implements IMenuService {
         }
 
         Menu existingMenu = menuRepository.findById(Long.valueOf(request.menuId()))
-                .orElseThrow(() -> new RuntimeException("Menu not found: " + request.menuId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Menu not found: " + request.menuId()));
 
         MenuService savedMenuService = menuServicesService.createMenuServices(existingMenu, request.foodType());
 

@@ -5,6 +5,7 @@ import com.miresta.dto.request.ProductRequest;
 import com.miresta.entity.Category;
 import com.miresta.entity.Product;
 import com.miresta.entity.ProductDetails;
+import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.ProductEntityRepository;
 import com.miresta.repository.projections.ProductInfo;
 import com.miresta.repository.projections.ProductWithDetails;
@@ -87,6 +88,6 @@ public class ProductServiceImpl implements IProductService {
     @Override
     public Product getProductById(Long productId) {
         return productEntityRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
     }
 }

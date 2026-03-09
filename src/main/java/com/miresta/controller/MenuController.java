@@ -15,7 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/menus")
 @RequiredArgsConstructor
-class MenuController {
+public class MenuController {
     private final MenuServiceImpl menuService;
 
     @PostMapping

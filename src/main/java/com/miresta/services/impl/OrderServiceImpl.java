@@ -3,12 +3,13 @@ package com.miresta.services.impl;
 import com.miresta.dto.request.CreateOrderRequest;
 import com.miresta.dto.response.*;
 import com.miresta.entity.*;
+import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.DiningRepository;
 import com.miresta.repository.OrderRepository;
 import com.miresta.repository.OrderStatusRepository;
 import com.miresta.services.IOrderService;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 @Service
+@Slf4j
 public class OrderServiceImpl implements IOrderService {
     private static final Long BASE_FULL_PRICE_LUNCH = 10000L;
     private static final Long BASE_TRAY_PRICE_LUNCH = 9000L;
@@ -43,7 +45,7 @@ public class OrderServiceImpl implements IOrderService {
 
         if (orderRequest.tableId() != null) {
             diningTable = diningRepository.findById(orderRequest.tableId())
-                    .orElseThrow(() -> new RuntimeException("Dining table not found: " + orderRequest.tableId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Dining table not found: " + orderRequest.tableId()));
 
             Optional<Order> existingOrder = orderRepository.findByDiningTable_IdAndDiningTable_Status_NameAndOrderStatus_Name(
                     orderRequest.tableId(), "IN_USE", "PENDING");
@@ -118,7 +120,7 @@ public class OrderServiceImpl implements IOrderService {
     @Override
     public OrderDetailsResponse getOrderDetail(Long orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Orden no encontrada con id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada con id: " + orderId));
 
         return new OrderDetailsResponse(
                 order.getId(),
@@ -163,11 +165,11 @@ public class OrderServiceImpl implements IOrderService {
     @Override
     public void updateOrderStatus(Long orderId, String status) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
         OrderStatus newStatus = orderStatusRepository.findByName(status);
         if (newStatus == null) {
-            throw new EntityNotFoundException("Order status not found: " + status);
+            throw new ResourceNotFoundException("Order status not found: " + status);
         }
 
         order.setOrderStatus(newStatus);

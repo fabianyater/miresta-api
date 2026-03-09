@@ -16,12 +16,12 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
-class ProductController {
+public class ProductController {
     private final ProductServiceImpl productService;
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ProductRequest> getProducts(@RequestBody ProductRequest productRequest) {
+    public ResponseEntity<Void> createProduct(@RequestBody ProductRequest productRequest) {
         productService.createProduct(productRequest);
 
         return ResponseEntity.status(HttpStatus.CREATED).build();

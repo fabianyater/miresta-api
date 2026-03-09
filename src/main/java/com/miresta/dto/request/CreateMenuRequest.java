@@ -1,7 +1,7 @@
 package com.miresta.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.miresta.dto.response.ProductWIthIdAndQuantity;
+import com.miresta.dto.response.ProductWithIdAndQuantity;
 
 import java.io.Serializable;
 import java.time.LocalDate;
@@ -14,7 +14,7 @@ public record CreateMenuRequest(
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd/MM/yyyy")
         LocalDate date,
         String foodType,
-        List<ProductWIthIdAndQuantity> products,
+        List<ProductWithIdAndQuantity> products,
         String menuId) implements Serializable {
 
 }

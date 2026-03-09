@@ -2,6 +2,7 @@ package com.miresta.services.impl;
 
 import com.miresta.dto.response.CategoryResponse;
 import com.miresta.entity.Category;
+import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.CategoryRepository;
 import com.miresta.services.ICategoryService;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,6 @@ public class CategoryServiceImpl implements ICategoryService {
     @Override
     public Category getCategoryById(Long id) {
         return categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Category not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
     }
 }

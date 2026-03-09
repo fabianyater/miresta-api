@@ -3,6 +3,7 @@ package com.miresta.services.impl;
 import com.miresta.entity.FoodType;
 import com.miresta.entity.Menu;
 import com.miresta.entity.MenuService;
+import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.MenuServiceRepository;
 import com.miresta.services.IMenuServicesService;
 import lombok.RequiredArgsConstructor;
@@ -17,13 +18,13 @@ public class MenuServicesServiceImpl implements IMenuServicesService {
     @Override
     public MenuService getMenuServiceById(Long menuServiceId) {
         return menuServiceRepository.findById(menuServiceId)
-                .orElseThrow(() -> new RuntimeException("Menu service not found: " + menuServiceId));
+                .orElseThrow(() -> new ResourceNotFoundException("Menu service not found: " + menuServiceId));
     }
 
     @Override
     public MenuService getMenuServiceByMenuIdAndFoodTypeName(Long menuId, String foodTypeName) {
         return menuServiceRepository.findByMenu_IdAndFoodType_Name(menuId, foodTypeName.toUpperCase())
-                .orElseThrow(() -> new RuntimeException("Menu service not found for menu id: " + menuId));
+                .orElseThrow(() -> new ResourceNotFoundException("Menu service not found for menu id: " + menuId));
     }
 
     @Override
