@@ -1,6 +1,7 @@
 package com.miresta.services.impl;
 
 import com.miresta.entity.FoodType;
+import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.FoodTypeRepository;
 import com.miresta.services.IFoodTypeService;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,6 @@ public class FoodTypeServiceImpl implements IFoodTypeService {
     @Override
     public FoodType getFoodType(String foodType) {
         return foodTypeRepository.findFoodTypeByName((foodType))
-                .orElseThrow(() -> new RuntimeException("Food type not found: " + foodType));
+                .orElseThrow(() -> new ResourceNotFoundException("Food type not found: " + foodType));
     }
 }

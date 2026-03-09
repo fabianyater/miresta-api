@@ -46,6 +46,9 @@ public class OrderController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<OrderDetailsResponse> getPendingOrderDetails(@PathVariable Long tableId) {
         OrderDetailsResponse orderDetail = orderService.getPendingOrderDetail(tableId);
+        if (orderDetail == null) {
+            return ResponseEntity.notFound().build();
+        }
         return ResponseEntity.ok(orderDetail);
     }
 

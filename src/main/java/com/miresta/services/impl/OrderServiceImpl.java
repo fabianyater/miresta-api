@@ -3,12 +3,16 @@ package com.miresta.services.impl;
 import com.miresta.dto.request.CreateOrderRequest;
 import com.miresta.dto.response.*;
 import com.miresta.entity.*;
+import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.DiningRepository;
 import com.miresta.repository.OrderRepository;
 import com.miresta.repository.OrderStatusRepository;
+import com.miresta.services.IOrderItemSelectionsService;
+import com.miresta.services.IOrderItemService;
 import com.miresta.services.IOrderService;
-import jakarta.persistence.EntityNotFoundException;
+import com.miresta.services.ITableService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,87 +24,71 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 @Service
+@Slf4j
 public class OrderServiceImpl implements IOrderService {
-    private static final Long BASE_FULL_PRICE_LUNCH = 10000L;
-    private static final Long BASE_TRAY_PRICE_LUNCH = 9000L;
-    private static final Long BASE_FULL_PRICE_BREAKFAST = 8000L;
-    private static final Long BASE_TRAY_PRICE_BREAKFAST = 7000L;
-    private static final Long TOGO_PRICE = 1000L;
-    private static final int SIDES_WITH_SOUP_FULL = 2;
-    private static final int SIDES_TRAY = 2;
 
     private final OrderRepository orderRepository;
     private final OrderStatusRepository orderStatusRepository;
     private final DiningRepository diningRepository;
-    private final OrderItemServiceImpl orderItemService;
-    private final OrderItemSelectionsImpl orderItemSelectionsService;
-    private final TableServiceImpl tableService;
+    private final IOrderItemService orderItemService;
+    private final IOrderItemSelectionsService orderItemSelectionsService;
+    private final ITableService tableService;
 
     @Transactional
     @Override
     public void createOrder(CreateOrderRequest orderRequest) {
-        DiningTable diningTable;
+        Order savedOrder;
 
         if (orderRequest.tableId() != null) {
-            diningTable = diningRepository.findById(orderRequest.tableId())
-                    .orElseThrow(() -> new RuntimeException("Dining table not found: " + orderRequest.tableId()));
+            DiningTable diningTable = diningRepository.findById(orderRequest.tableId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Dining table not found: " + orderRequest.tableId()));
 
-            Optional<Order> existingOrder = orderRepository.findByDiningTable_IdAndDiningTable_Status_NameAndOrderStatus_Name(
-                    orderRequest.tableId(), "IN_USE", "PENDING");
+            savedOrder = orderRepository
+                    .findByDiningTable_IdAndDiningTable_Status_NameAndOrderStatus_Name(
+                            orderRequest.tableId(), "IN_USE", "PENDING")
+                    .orElseGet(() -> {
+                        tableService.updateTableStatus(diningTable, "IN_USE");
 
-            Order savedOrder;
+                        Order order = new Order();
+                        order.setCreatedAt(Instant.now());
+                        order.setDiningTable(diningTable);
+                        order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
 
-            if (existingOrder.isPresent()) {
-                savedOrder = existingOrder.get();
-            } else {
-                tableService.updateTableStatus(diningTable, "IN_USE");
-
-                Order order = new Order();
-                order.setCreatedAt(Instant.now());
-                order.setDiningTable(diningTable);
-                order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
-
-                savedOrder = orderRepository.save(order);
-            }
-
-            orderRequest.orders().forEach(o -> {
-                int repetitions = (o.count() != null && o.count() > 0) ? o.count() : 1;
-
-                for (int i = 0; i < repetitions; i++) {
-                    OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
-                    orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
-                    orderItemService.updateTotalPrice(orderItem);
-                }
-            });
-
-            calculateTotals(savedOrder);
-            orderRepository.save(savedOrder);
+                        return orderRepository.save(order);
+                    });
         } else {
             Order order = new Order();
             order.setCreatedAt(Instant.now());
             order.setDiningTable(null);
             order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
 
-            Order savedOrder = orderRepository.save(order);
-
-            orderRequest.orders().forEach(o -> {
-                int repetitions = (o.count() != null && o.count() > 0) ? o.count() : 1;
-
-                for (int i = 0; i < repetitions; i++) {
-                    OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
-                    orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
-                    orderItemService.updateTotalPrice(orderItem);
-                }
-            });
-
-            calculateTotals(savedOrder);
-            orderRepository.save(savedOrder);
+            savedOrder = orderRepository.save(order);
         }
+
+        processOrderItems(savedOrder, orderRequest);
+        calculateTotals(savedOrder);
+        orderRepository.save(savedOrder);
+    }
+
+    private void processOrderItems(Order savedOrder, CreateOrderRequest orderRequest) {
+        orderRequest.orders().forEach(o -> {
+            int repetitions = (o.count() != null && o.count() > 0) ? o.count() : 1;
+
+            for (int i = 0; i < repetitions; i++) {
+                OrderItem orderItem = orderItemService.createOrderItem(savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments());
+                orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
+                orderItemService.updateTotalPrice(orderItem);
+            }
+        });
     }
 
     @Override
     public List<OrdersResponse> getOrders(String status) {
-        return orderRepository.findByOrderStatus_Name(status).stream()
+        List<Order> orders = (status == null || status.isBlank())
+                ? orderRepository.findAll()
+                : orderRepository.findByOrderStatus_Name(status);
+
+        return orders.stream()
                 .map(order -> new OrdersResponse(
                         order.getId(),
                         order.getCreatedAt(),
@@ -118,7 +106,7 @@ public class OrderServiceImpl implements IOrderService {
     @Override
     public OrderDetailsResponse getOrderDetail(Long orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Orden no encontrada con id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("Orden no encontrada con id: " + orderId));
 
         return new OrderDetailsResponse(
                 order.getId(),
@@ -163,11 +151,11 @@ public class OrderServiceImpl implements IOrderService {
     @Override
     public void updateOrderStatus(Long orderId, String status) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
         OrderStatus newStatus = orderStatusRepository.findByName(status);
         if (newStatus == null) {
-            throw new EntityNotFoundException("Order status not found: " + status);
+            throw new ResourceNotFoundException("Order status not found: " + status);
         }
 
         order.setOrderStatus(newStatus);

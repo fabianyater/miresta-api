@@ -1,13 +1,15 @@
 package com.miresta.services.impl;
 
-import com.miresta.dto.response.ProductWIthIdAndQuantity;
+import com.miresta.dto.response.ProductWithIdAndQuantity;
 import com.miresta.entity.Category;
 import com.miresta.entity.OrderItem;
 import com.miresta.entity.OrderItemSelection;
 import com.miresta.entity.Product;
+import com.miresta.exception.ResourceNotFoundException;
 import com.miresta.repository.CategoryRepository;
 import com.miresta.repository.OrderItemSelectionsRepository;
 import com.miresta.services.IOrderItemSelectionsService;
+import com.miresta.services.IProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,7 +19,7 @@ import java.util.List;
 @Service
 public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
     private final OrderItemSelectionsRepository orderItemSelectionsRepository;
-    private final ProductServiceImpl productService;
+    private final IProductService productService;
     private final CategoryRepository categoryRepository;
 
     @Override
@@ -26,13 +28,13 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
     }
 
     @Override
-    public void createOrderItemSelection(OrderItem orderItem, List<ProductWIthIdAndQuantity> item) {
+    public void createOrderItemSelection(OrderItem orderItem, List<ProductWithIdAndQuantity> item) {
         for (var it : item) {
             Product product = productService.getProductById(it.id());
             Category category = product.getCategory();
 
             if (category == null) {
-                throw new RuntimeException("Product has no category assigned: " + product.getId());
+                throw new ResourceNotFoundException("Product has no category assigned: " + product.getId());
             }
 
             OrderItemSelection orderItemSelection = new OrderItemSelection();
