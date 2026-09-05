@@ -1,0 +1,25 @@
+package com.miresta.printing;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/printer-setting")
+@RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+public class PrinterSettingController {
+
+    private final PrinterSettingService printerSettingService;
+
+    @GetMapping
+    public ResponseEntity<PrinterSettingResponse> get() {
+        return ResponseEntity.ok(printerSettingService.get());
+    }
+
+    @PutMapping
+    public ResponseEntity<PrinterSettingResponse> update(@RequestBody UpdatePrinterSettingRequest request) {
+        return ResponseEntity.ok(printerSettingService.update(request));
+    }
+}

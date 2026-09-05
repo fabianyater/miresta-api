@@ -1,0 +1,584 @@
+package com.miresta.order;
+
+import com.miresta.customer.Customer;
+import com.miresta.customer.CustomerResponse;
+import com.miresta.customer.ICustomerService;
+import com.miresta.menu.MenuItemServiceImpl;
+import com.miresta.menu.MenuOfferingResponse;
+import com.miresta.order.pricing.PricingCalculator;
+import com.miresta.shared.ComboCategory;
+import com.miresta.shared.Money;
+import com.miresta.table.DiningTable;
+import com.miresta.table.DiningTableRepository;
+import com.miresta.table.DiningTableResponse;
+import com.miresta.table.TableServiceImpl;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@RequiredArgsConstructor
+@Service
+public class OrderServiceImpl implements IOrderService {
+
+    private static final ZoneId RESTAURANT_ZONE = ZoneId.of("America/Bogota");
+
+    private final OrderRepository orderRepository;
+    private final OrderStatusRepository orderStatusRepository;
+    private final DiningTableRepository diningTableRepository;
+    private final ICustomerService customerService;
+    private final IPaymentTypeService paymentTypeService;
+    private final OrderItemServiceImpl orderItemService;
+    private final OrderItemSelectionsImpl orderItemSelectionsService;
+    private final TableServiceImpl tableService;
+    private final MenuItemServiceImpl menuItemService;
+    private final OrderItemRepository orderItemRepository;
+    private final OrderItemSelectionsRepository orderItemSelectionsRepository;
+    private final PricingCalculator pricingCalculator;
+
+    @Transactional
+    @Override
+    public void createOrder(CreateOrderRequest orderRequest) {
+        Customer customer = orderRequest.customerId() != null
+                ? customerService.getCustomerById(orderRequest.customerId())
+                : null;
+
+        Order savedOrder;
+
+        if (orderRequest.tableId() != null) {
+            // Locked, not a plain findById — otherwise two near-simultaneous requests
+            // for the same table (two waiters, or a retry) can both see "no pending
+            // order yet" before either commits, and each creates its own separate
+            // ticket instead of sharing one. The second request just waits here for the
+            // first to finish, then correctly finds and reuses what it created.
+            DiningTable diningTable = diningTableRepository.findByIdForUpdate(orderRequest.tableId())
+                    .orElseThrow(() -> new RuntimeException("Dining table not found: " + orderRequest.tableId()));
+
+            Optional<Order> existingOrder = orderRepository.findByDiningTable_IdAndDiningTable_Status_NameAndOrderStatus_Name(
+                    orderRequest.tableId(), "IN_USE", "PENDING");
+
+            if (existingOrder.isPresent()) {
+                savedOrder = existingOrder.get();
+                // Un pedido pendiente puede recibir varias tandas de items (mesa que sigue
+                // pidiendo) — si esta tanda trae un cliente, se registra en el pedido aunque
+                // ya existiera, en vez de descartarlo silenciosamente.
+                if (customer != null) {
+                    savedOrder.setCustomer(customer);
+                }
+            } else {
+                tableService.updateTableStatus(diningTable, "IN_USE");
+
+                Order order = new Order();
+                order.setCreatedAt(Instant.now());
+                order.setDiningTable(diningTable);
+                order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
+                order.setCustomer(customer);
+
+                savedOrder = orderRepository.save(order);
+            }
+        } else {
+            Order order = new Order();
+            order.setCreatedAt(Instant.now());
+            order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
+            order.setCustomer(customer);
+
+            savedOrder = orderRepository.save(order);
+        }
+
+        for (OrderRequest o : orderRequest.orders()) {
+            int repetitions = (o.count() != null && o.count() > 0) ? o.count() : 1;
+
+            // This plato's own customer, if it brought one — otherwise falls back to the
+            // request's top-level customer, so the common single-customer case (every
+            // plato in this submission is for the same person) still works unchanged.
+            Customer itemCustomer = o.customerId() != null
+                    ? customerService.getCustomerById(o.customerId())
+                    : customer;
+
+            for (int i = 0; i < repetitions; i++) {
+                OrderItem orderItem = orderItemService.createOrderItem(
+                        savedOrder, o.menuId(), o.mealType(), o.isToGo(), o.comments(), itemCustomer);
+                orderItemSelectionsService.createOrderItemSelection(orderItem, o.items());
+                orderItemService.updateTotalPrice(orderItem);
+            }
+        }
+
+        calculateTotals(savedOrder);
+        orderRepository.save(savedOrder);
+    }
+
+    @Override
+    public List<OrdersResponse> getOrders(String status, Long customerId) {
+        List<Order> orders;
+
+        if (customerId != null) {
+            orders = orderRepository.findByCustomer_IdOrderByCreatedAtDesc(customerId);
+            if (status != null && !status.isBlank()) {
+                orders = orders.stream()
+                        .filter(o -> o.getOrderStatus() != null && status.equalsIgnoreCase(o.getOrderStatus().getName()))
+                        .toList();
+            }
+        } else {
+            orders = orderRepository.findByOrderStatus_Name(status);
+        }
+
+        return orders.stream()
+                .map(this::mapOrdersResponse)
+                .sorted(Comparator.comparing(OrdersResponse::createdAt).reversed())
+                .toList();
+    }
+
+    @Override
+    public List<OrdersResponse> getOrderHistory(LocalDate date) {
+        Instant from = date.atStartOfDay(RESTAURANT_ZONE).toInstant();
+        Instant to = date.plusDays(1).atStartOfDay(RESTAURANT_ZONE).toInstant();
+
+        return orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(from, to).stream()
+                .map(this::mapOrdersResponse)
+                .toList();
+    }
+
+    private OrdersResponse mapOrdersResponse(Order order) {
+        return new OrdersResponse(
+                order.getId(),
+                order.getCreatedAt(),
+                order.getNotes(),
+                order.getSubtotal(),
+                order.getTotal(),
+                mapDiningTable(order.getDiningTable()),
+                mapOrderStatus(order.getOrderStatus()),
+                mapCustomer(order.getCustomer()),
+                mapPaymentType(order.getPaymentType()),
+                order.getPaidAt() != null
+        );
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public OrderDetailsResponse getOrderDetail(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Orden no encontrada con id: " + orderId));
+
+        return new OrderDetailsResponse(
+                order.getId(),
+                order.getCreatedAt(),
+                order.getNotes(),
+                order.getSubtotal(),
+                order.getTotal(),
+                mapDiningTable(order.getDiningTable()),
+                mapOrderStatus(order.getOrderStatus()),
+                mapCustomer(order.getCustomer()),
+                mapPaymentType(order.getPaymentType()),
+                order.getPaidAt() != null,
+                order.getOrderItems().stream()
+                        .sorted(Comparator.comparing(OrderItem::getId).reversed())
+                        .map(this::mapOrderItem)
+                        .toList()
+        );
+    }
+
+    @Override
+    public OrderDetailsResponse getPendingOrderDetail(Long tableId) {
+        Order order = orderRepository.findByDiningTable_IdAndDiningTable_Status_NameAndOrderStatus_Name(
+                        tableId, "IN_USE", "PENDING")
+                .orElse(null);
+
+        if (order == null) {
+            return null;
+        }
+
+        return new OrderDetailsResponse(
+                order.getId(),
+                order.getCreatedAt(),
+                order.getNotes(),
+                order.getSubtotal(),
+                order.getTotal(),
+                mapDiningTable(order.getDiningTable()),
+                mapOrderStatus(order.getOrderStatus()),
+                mapCustomer(order.getCustomer()),
+                mapPaymentType(order.getPaymentType()),
+                order.getPaidAt() != null,
+                order.getOrderItems().stream()
+                        .map(this::mapOrderItem)
+                        .toList()
+        );
+    }
+
+    @Transactional
+    @Override
+    public void updateOrderStatus(Long orderId, String status, Long paymentTypeId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
+
+        OrderStatus newStatus = orderStatusRepository.findByName(status);
+        if (newStatus == null) {
+            throw new EntityNotFoundException("Order status not found: " + status);
+        }
+
+        boolean wasAlreadyCancelled = "CANCELLED".equalsIgnoreCase(order.getOrderStatus().getName());
+
+        if (wasAlreadyCancelled && "COMPLETED".equalsIgnoreCase(status)) {
+            // A cancelled order already had its reserved stock given back — completing
+            // (charging for) it afterward would bill for something that was voided.
+            throw new IllegalStateException("Este pedido está cancelado, no se puede cobrar.");
+        }
+
+        order.setOrderStatus(newStatus);
+
+        if ("COMPLETED".equalsIgnoreCase(status)) {
+            if (paymentTypeId != null) {
+                order.setPaymentType(paymentTypeService.getPaymentTypeById(paymentTypeId));
+                order.setPaidAt(Instant.now());
+            } else if (order.getCustomer() != null) {
+                // Fiado: served and the table is freed, but billed to the customer's
+                // open tab — stays unpaid until settled later (payOrder/settleCustomerTab).
+                order.setPaymentType(null);
+                order.setPaidAt(null);
+            } else {
+                throw new IllegalStateException(
+                        "Selecciona un método de pago, o un cliente para dejar la cuenta abierta.");
+            }
+        }
+
+        orderRepository.save(order);
+
+        if ("COMPLETED".equalsIgnoreCase(status)) {
+            Optional.ofNullable(order.getDiningTable()).ifPresent(diningTable ->
+                    tableService.updateTableStatus(diningTable, "OPEN"));
+        }
+
+        if ("CANCELLED".equalsIgnoreCase(status) && !wasAlreadyCancelled) {
+            // Symmetric to the consume() call in OrderItemSelectionsImpl#createOrderItemSelection —
+            // give back whatever menu-item stock this order had reserved.
+            for (OrderItem item : orderItemService.getOrderItemsByOrder(order)) {
+                for (OrderItemSelection selection : orderItemSelectionsService.getOrderItemSelectionByOrderItem(item)) {
+                    menuItemService.restore(item.getMenuOffering(), selection.getProduct(), selection.getQuantity());
+                }
+            }
+
+            // A cancelled order is no longer occupying the table either.
+            Optional.ofNullable(order.getDiningTable()).ifPresent(diningTable ->
+                    tableService.updateTableStatus(diningTable, "OPEN"));
+        }
+    }
+
+    @Transactional
+    @Override
+    public void payOrder(Long orderId, Long paymentTypeId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
+
+        if (!"COMPLETED".equalsIgnoreCase(order.getOrderStatus().getName())) {
+            throw new IllegalStateException("Solo se puede pagar un pedido ya completado.");
+        }
+        if (order.getPaidAt() != null) {
+            throw new IllegalStateException("Este pedido ya fue pagado.");
+        }
+        if (paymentTypeId == null) {
+            throw new IllegalStateException("Debes indicar un método de pago.");
+        }
+
+        order.setPaymentType(paymentTypeService.getPaymentTypeById(paymentTypeId));
+        order.setPaidAt(Instant.now());
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    @Override
+    public OrderDetailsResponse fiarCliente(Long orderId, Long customerId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Orden no encontrada con id: " + orderId));
+
+        if (!"PENDING".equalsIgnoreCase(order.getOrderStatus().getName())) {
+            throw new IllegalStateException("Solo se puede fiar un pedido que sigue pendiente.");
+        }
+
+        Customer customer = customerService.getCustomerById(customerId);
+
+        List<OrderItem> allItems = orderItemService.getOrderItemsByOrder(order);
+        List<OrderItem> toMove = allItems.stream()
+                .filter(item -> {
+                    Customer effective = item.getCustomer() != null ? item.getCustomer() : order.getCustomer();
+                    return effective != null && effective.getId().equals(customerId);
+                })
+                .toList();
+
+        if (toMove.isEmpty()) {
+            throw new IllegalStateException("Este cliente no tiene platos en este pedido.");
+        }
+
+        // The new tab keeps the same table/creation time (for history — "this fiado tab
+        // came from Mesa 3, ordered at 1pm") even though it's no longer occupying the
+        // table itself; only the ORIGINAL order's remaining items (if any) do that.
+        Order tabOrder = new Order();
+        tabOrder.setCreatedAt(order.getCreatedAt());
+        tabOrder.setDiningTable(order.getDiningTable());
+        tabOrder.setOrderStatus(orderStatusRepository.findByName("COMPLETED"));
+        tabOrder.setCustomer(customer);
+        tabOrder = orderRepository.save(tabOrder);
+
+        long movedTotal = 0L;
+        for (OrderItem item : toMove) {
+            movedTotal += item.getTotal() != null ? item.getTotal().amount() : 0L;
+            item.setOrder(tabOrder);
+        }
+        orderItemRepository.saveAll(toMove);
+        tabOrder.setSubtotal(Money.of(movedTotal));
+        tabOrder.setTotal(Money.of(movedTotal));
+        orderRepository.save(tabOrder);
+
+        // Changing item.order's FK doesn't retroactively update order's own in-memory
+        // orderItems collection (same persistence context, so a later findById(orderId)
+        // — e.g. from getOrderDetail below — returns this exact stale collection instead
+        // of re-querying) — drop the moved items from it explicitly so the response
+        // reflects reality.
+        order.getOrderItems().removeAll(toMove);
+
+        boolean movedEverything = toMove.size() == allItems.size();
+        if (movedEverything) {
+            // Nothing of its own left on the original ticket — it's fully resolved (all
+            // of it just became the new tab), so it's closed out and the table freed,
+            // same as if it had been cancelled.
+            order.setOrderStatus(orderStatusRepository.findByName("CANCELLED"));
+            order.setSubtotal(Money.ZERO);
+            order.setTotal(Money.ZERO);
+            Optional.ofNullable(order.getDiningTable())
+                    .ifPresent(diningTable -> tableService.updateTableStatus(diningTable, "OPEN"));
+        } else {
+            long remainingTotal = allItems.stream()
+                    .filter(item -> !toMove.contains(item))
+                    .mapToLong(item -> item.getTotal() != null ? item.getTotal().amount() : 0L)
+                    .sum();
+            order.setSubtotal(Money.of(remainingTotal));
+            order.setTotal(Money.of(remainingTotal));
+        }
+        orderRepository.save(order);
+
+        return getOrderDetail(order.getId());
+    }
+
+    @Transactional
+    @Override
+    public SettleTabResponse settleCustomerTab(Long customerId, Long paymentTypeId) {
+        if (paymentTypeId == null) {
+            throw new IllegalStateException("Debes indicar un método de pago.");
+        }
+
+        List<Order> pending = orderRepository.findByCustomer_IdAndOrderStatus_NameAndPaidAtIsNull(customerId, "COMPLETED");
+        if (pending.isEmpty()) {
+            throw new IllegalStateException("Este cliente no tiene cuentas pendientes por pagar.");
+        }
+
+        PaymentType paymentType = paymentTypeService.getPaymentTypeById(paymentTypeId);
+        Instant now = Instant.now();
+        long totalPaid = 0L;
+
+        for (Order order : pending) {
+            order.setPaymentType(paymentType);
+            order.setPaidAt(now);
+            totalPaid += order.getTotal() != null ? order.getTotal().amount() : 0L;
+        }
+
+        orderRepository.saveAll(pending);
+
+        return new SettleTabResponse(pending.size(), Money.of(totalPaid));
+    }
+
+    @Override
+    public List<CustomerBalanceResponse> getCustomerBalances() {
+        return orderRepository.findCustomerBalances().stream()
+                .map(row -> new CustomerBalanceResponse(
+                        row.customerId(),
+                        row.customerName(),
+                        row.pendingOrders(),
+                        Money.of(row.totalOwed() != null ? row.totalOwed() : 0L)))
+                .toList();
+    }
+
+    @Override
+    public List<PaymentTotalResponse> getPaymentTotals(LocalDate date) {
+        Instant from = date.atStartOfDay(RESTAURANT_ZONE).toInstant();
+        Instant to = date.plusDays(1).atStartOfDay(RESTAURANT_ZONE).toInstant();
+
+        return orderRepository.findPaymentTotals(from, to).stream()
+                .map(row -> new PaymentTotalResponse(
+                        row.paymentTypeName() != null ? row.paymentTypeName() : "Sin especificar",
+                        row.orderCount(),
+                        Money.of(row.total() != null ? row.total() : 0L)))
+                .toList();
+    }
+
+    @Override
+    public DailyReportResponse getDailyReport(LocalDate date) {
+        Instant from = date.atStartOfDay(RESTAURANT_ZONE).toInstant();
+        Instant to = date.plusDays(1).atStartOfDay(RESTAURANT_ZONE).toInstant();
+
+        DaySummaryRow summary = orderRepository.findDaySummary(from, to);
+        OpenTabsRow openTabs = orderRepository.findOpenTabsInRange(from, to);
+        Long additionsQty = orderItemSelectionsRepository.sumSelectionQuantityByCategory(from, to, ComboCategory.ADICIONAL);
+
+        List<DailyReportResponse.MealTypeSummary> mealTypeCounts = orderItemRepository.findMealTypeCounts(from, to).stream()
+                .map(row -> new DailyReportResponse.MealTypeSummary(
+                        row.foodType(), row.count(), Money.of(row.total() != null ? row.total() : 0L)))
+                .toList();
+
+        List<DailyReportResponse.FulfillmentSummary> fulfillmentCounts = orderItemRepository.findFulfillmentCounts(from, to).stream()
+                .map(row -> new DailyReportResponse.FulfillmentSummary(
+                        "OUT".equals(row.orderTypeName()) ? "PARA_LLEVAR" : "EN_SITIO",
+                        row.count(),
+                        Money.of(row.total() != null ? row.total() : 0L)))
+                .toList();
+
+        Map<Integer, Long> byHour = orderRepository.findOrderCreatedTimesInRange(from, to).stream()
+                .collect(Collectors.groupingBy(ts -> ts.atZone(RESTAURANT_ZONE).getHour(), Collectors.counting()));
+        List<DailyReportResponse.HourlyCount> hourlyCounts = byHour.entrySet().stream()
+                .map(e -> new DailyReportResponse.HourlyCount(e.getKey(), e.getValue()))
+                .sorted(Comparator.comparingInt(DailyReportResponse.HourlyCount::hour))
+                .toList();
+
+        return new DailyReportResponse(
+                summary.totalOrders(),
+                summary.cancelledOrders(),
+                Money.of(summary.totalSales() != null ? summary.totalSales() : 0L),
+                summary.registeredCustomers(),
+                openTabs.count(),
+                Money.of(openTabs.total() != null ? openTabs.total() : 0L),
+                additionsQty != null ? additionsQty : 0L,
+                mealTypeCounts,
+                fulfillmentCounts,
+                hourlyCounts);
+    }
+
+    private void calculateTotals(Order order) {
+        List<OrderItem> items = orderItemService.getOrderItemsByOrder(order);
+
+        long orderSubtotal = 0L;
+
+        for (OrderItem oi : items) {
+            orderSubtotal += oi.getTotal() != null ? oi.getTotal().amount() : 0L;
+        }
+
+        order.setSubtotal(Money.of(orderSubtotal));
+        order.setTotal(Money.of(orderSubtotal));
+    }
+
+    private DiningTableResponse mapDiningTable(DiningTable diningTable) {
+        if (diningTable == null) {
+            return null;
+        }
+        return new DiningTableResponse(
+                diningTable.getId(),
+                diningTable.getNumber(),
+                diningTable.getStatus() != null ? diningTable.getStatus().getName() : null
+        );
+    }
+
+    private OrderStatusDto mapOrderStatus(OrderStatus orderStatus) {
+        return new OrderStatusDto(
+                orderStatus.getId(),
+                orderStatus.getName()
+        );
+    }
+
+    private CustomerResponse mapCustomer(Customer customer) {
+        if (customer == null) {
+            return null;
+        }
+        return new CustomerResponse(customer.getId(), customer.getName(), customer.getPhone(), customer.isActive());
+    }
+
+    private PaymentTypeResponse mapPaymentType(PaymentType paymentType) {
+        if (paymentType == null) {
+            return null;
+        }
+        return new PaymentTypeResponse(paymentType.getId(), paymentType.getName());
+    }
+
+    private OrderItemResponse mapOrderItem(OrderItem orderItem) {
+        String mealType = orderItem.getMenuOffering().getFoodType().getName();
+        boolean comboFormed = orderItem.getBaseTotal() != null && orderItem.getBaseTotal().amount() > 0;
+
+        // This plato's own customer if it has one, else whoever the order itself belongs
+        // to — a plato created before per-item customers existed (or one that just never
+        // got its own) still shows something sensible instead of blank.
+        Customer effectiveCustomer = orderItem.getCustomer() != null
+                ? orderItem.getCustomer()
+                : orderItem.getOrder().getCustomer();
+
+        var groupedSelections = orderItem.getOrderItemSelections().stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        selection -> selection.getProduct().getCategory() != null
+                                ? selection.getProduct().getCategory().getName()
+                                : "Sin categoría"
+                ));
+
+        List<GroupedOrderItemResponse> itemsByCategory = groupedSelections.entrySet().stream()
+                .map(entry -> new GroupedOrderItemResponse(
+                        entry.getKey(),
+                        entry.getValue().stream()
+                                .map(selection -> new OrderItemProductResponse(
+                                        selection.getProduct().getId(),
+                                        selection.getProduct().getName(),
+                                        selection.getQuantity(),
+                                        selection.getUnitExtraPrice(),
+                                        Money.of(Optional.ofNullable(selection.getProduct().getProductDetails())
+                                                .map(details -> details.stream()
+                                                        .map(d -> d.getPrice() != null ? d.getPrice().amount() : 0L)
+                                                        .reduce(0L, Long::sum))
+                                                .orElse(0L)),
+                                        selection.getReplacementCategory(),
+                                        pricingCalculator.lineTotalFor(selection, mealType, comboFormed)
+                                ))
+                                .toList()
+                ))
+                .toList();
+
+        return new OrderItemResponse(
+                orderItem.getId(),
+                orderItem.getComments(),
+                orderItem.getComboLabel(),
+                mapCustomer(effectiveCustomer),
+                orderItem.getBaseTotal(),
+                zeroIfNull(orderItem.getDrinksTotal()),
+                zeroIfNull(orderItem.getProteinAdditionalsTotal()),
+                zeroIfNull(orderItem.getSideAdditionalsTotal()),
+                zeroIfNull(orderItem.getExtrasTotal()),
+                zeroIfNull(orderItem.getIndividualsTotal()),
+                orderItem.getToGoSurcharge(),
+                orderItem.getTotal(),
+                mapMenuOffering(orderItem.getMenuOffering()),
+                mapOrderType(orderItem.getOrderType()),
+                itemsByCategory
+        );
+    }
+
+    // Order items created before the price-breakdown columns existed have null here —
+    // treat them as zero rather than leaking null into the API response.
+    private Money zeroIfNull(Money money) {
+        return money != null ? money : Money.ZERO;
+    }
+
+    private MenuOfferingResponse mapMenuOffering(com.miresta.menu.MenuOffering menuOffering) {
+        return new MenuOfferingResponse(
+                menuOffering.getId(),
+                menuOffering.getMenu() != null ? menuOffering.getMenu().getDate() : null,
+                menuOffering.getFoodType() != null ? menuOffering.getFoodType().getName() : null
+        );
+    }
+
+    private OrderTypeDto mapOrderType(OrderType orderType) {
+        return new OrderTypeDto(
+                orderType.getId(),
+                orderType.getName()
+        );
+    }
+}

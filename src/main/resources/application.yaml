@@ -2,21 +2,32 @@ server:
   port: 8081
 
 spring:
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: http://localhost:8080/realms/miresta
   jpa:
     database: POSTGRESQL
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
   datasource:
     url: jdbc:postgresql://localhost:5432/miresta
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
 
 app:
   cors:
-    allowed-origins: "http://localhost:3000,http://localhost:5173"
+    # Patrones (no solo orígenes exactos) — así entra también desde el celular por la
+    # IP de la red local (ej. https://192.168.20.145:5173), sin fijar una IP puntual
+    # que cambie con el DHCP. El frontend dev ahora sirve por HTTPS (certificado
+    # autofirmado, requerido por Chrome/Edge para el permiso de red local en celulares)
+    # — el navegador reenvía el Origin real tal cual a través del proxy de Vite, así
+    # que el esquema (https) tiene que coincidir aquí también.
+    allowed-origins: "http://localhost:3000,http://localhost:5173,https://localhost:5173,https://192.168.*.*:5173,https://10.*.*.*:5173,https://172.16.*.*:5173"
+  jwt:
+    # Dev-only secret — replace with a real secret (32+ random bytes) outside local dev.
+    secret: "miresta-dev-secret-change-me-please-32bytes-minimum"
+    expiration-ms: 43200000 # 12h
+  printer:
+    default-ip: "192.168.1.50"
+    default-port: 9100
