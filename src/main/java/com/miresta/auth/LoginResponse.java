@@ -1,4 +1,4 @@
 package com.miresta.auth;
 
-public record LoginResponse(String token, String email, Role role) {
+public record LoginResponse(String token, String email, String name, String displayName, Role role) {
 }

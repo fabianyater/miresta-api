@@ -55,6 +55,21 @@ huevo frito", sin tener que ir caminando o gritar. Podría ser tan simple como u
 lista de mensajes predefinidos + uno libre, mostrados en una pantalla/tablet en
 cocina, o notificaciones push si cocina también tiene un dispositivo.
 
+## 6. Apertura y cierre de caja (turno)
+
+Manejar el turno de caja como en un POS de verdad:
+- **Apertura:** al empezar el día, registrar el fondo/base de caja con el que se
+  arranca (efectivo inicial), quién abre y a qué hora.
+- **Durante el turno:** entradas/salidas de efectivo que no son ventas (compras de
+  cocina pagadas de caja, retiros, etc.).
+- **Cierre:** al terminar, el sistema muestra cuánto **debería** haber en efectivo
+  (base + ventas en efectivo del turno − salidas), el cajero cuenta lo real y se
+  registra el **descuadre** (sobrante/faltante), quién cierra y a qué hora.
+- Reporte de arqueo por turno/día, y que el "Resumen del día" y los totales por
+  método de pago se aten al turno de caja abierto, no solo a la fecha.
+
+Anotado el 10/09/2026 a pedido de Fabián.
+
 ---
 
 **Nota:** las ideas 1, 3 y 4 comparten la misma base técnica (algo en tiempo real —

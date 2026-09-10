@@ -21,5 +21,6 @@ public record OrderDetailsResponse(
         PaymentTypeResponse paymentType,
         boolean paid,
         List<OrderItemResponse> orderItems,
-        List<OrderPaymentResponse> payments) {
+        List<OrderPaymentResponse> payments,
+        String waiterName) {
 }

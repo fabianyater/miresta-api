@@ -14,9 +14,13 @@ public interface IOrderService {
 
     OrderDetailsResponse getPendingOrderDetail(Long tableId);
 
-    void updateOrderStatus(Long orderId, String status, List<PaymentLine> payments);
+    /**
+     * @return el resultado del cobro (con el cambio a devolver) si el pedido se
+     * completó pagando; {@code null} si se canceló o quedó como cuenta abierta.
+     */
+    PaymentResultResponse updateOrderStatus(Long orderId, String status, List<PaymentLine> payments);
 
-    void payOrder(Long orderId, List<PaymentLine> payments);
+    PaymentResultResponse payOrder(Long orderId, List<PaymentLine> payments);
 
     /**
      * Splits off every plato in this (still-pending) order that belongs to the given

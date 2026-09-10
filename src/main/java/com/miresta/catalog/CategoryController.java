@@ -15,6 +15,7 @@ import java.util.List;
 public class CategoryController {
     private final ICategoryService categoryService;
 
+    @PreAuthorize("hasAnyRole('MESERO', 'ADMIN', 'OWNER')")
     @GetMapping
     public ResponseEntity<List<CategoryResponse>> getCategories() {
         return new ResponseEntity<>(categoryService.getCategories(), HttpStatus.OK);

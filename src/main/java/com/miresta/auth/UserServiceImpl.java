@@ -32,6 +32,8 @@ public class UserServiceImpl implements IUserService {
 
         User user = new User();
         user.setEmail(request.email());
+        user.setName(request.name() != null ? request.name().trim() : "");
+        user.setDisplayName(resolveDisplayName(request.displayName(), request.name(), request.email()));
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(request.role());
         user.setActive(true);
@@ -81,6 +83,12 @@ public class UserServiceImpl implements IUserService {
                 throw new EntityExistsException("Ya existe un usuario con ese correo: " + request.email());
             });
             user.setEmail(request.email());
+        }
+        if (request.name() != null && !request.name().isBlank()) {
+            user.setName(request.name().trim());
+        }
+        if (request.displayName() != null) {
+            user.setDisplayName(resolveDisplayName(request.displayName(), user.getName(), user.getEmail()));
         }
         if (request.password() != null && !request.password().isBlank()) {
             user.setPasswordHash(passwordEncoder.encode(request.password()));
@@ -132,6 +140,23 @@ public class UserServiceImpl implements IUserService {
     }
 
     private UserResponse toResponse(User user) {
-        return new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive());
+        return new UserResponse(
+                user.getId(), user.getEmail(), user.getName(), user.getDisplayName(),
+                user.getRole(), user.isActive());
+    }
+
+    /**
+     * Nombre corto para el badge de Pedidos y el ticket: el que se indique, o la
+     * primera palabra del nombre completo, o la parte local del correo como red de
+     * seguridad — nunca vacío.
+     */
+    private String resolveDisplayName(String displayName, String name, String email) {
+        if (displayName != null && !displayName.isBlank()) {
+            return displayName.trim();
+        }
+        if (name != null && !name.isBlank()) {
+            return name.trim().split("\\s+")[0];
+        }
+        return email.split("@")[0];
     }
 }

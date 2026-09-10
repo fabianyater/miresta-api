@@ -58,6 +58,9 @@ public class Order {
     @AttributeOverride(name = "amount", column = @Column(name = "total"))
     private Money total;
 
+    @Column(name = "waiters")
+    private String waiterName;
+
     @OneToMany(mappedBy = "order")
     private Set<OrderItem> orderItems = new LinkedHashSet<>();
 }

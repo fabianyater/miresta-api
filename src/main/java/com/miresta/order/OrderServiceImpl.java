@@ -1,5 +1,7 @@
 package com.miresta.order;
 
+import com.miresta.auth.User;
+import com.miresta.auth.UserRepository;
 import com.miresta.catalog.ProductBatchServiceImpl;
 import com.miresta.customer.Customer;
 import com.miresta.customer.CustomerResponse;
@@ -15,17 +17,16 @@ import com.miresta.table.DiningTableResponse;
 import com.miresta.table.TableServiceImpl;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -48,10 +49,12 @@ public class OrderServiceImpl implements IOrderService {
     private final OrderItemSelectionsRepository orderItemSelectionsRepository;
     private final OrderPaymentRepository orderPaymentRepository;
     private final PricingCalculator pricingCalculator;
+    private final UserRepository userRepository;
 
     @Transactional
     @Override
     public void createOrder(CreateOrderRequest orderRequest) {
+        String waiterName = currentWaiterName();
         Customer customer = orderRequest.customerId() != null
                 ? customerService.getCustomerById(orderRequest.customerId())
                 : null;
@@ -86,6 +89,7 @@ public class OrderServiceImpl implements IOrderService {
                 order.setDiningTable(diningTable);
                 order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
                 order.setCustomer(customer);
+                order.setWaiterName(waiterName);
 
                 savedOrder = orderRepository.save(order);
             }
@@ -94,6 +98,7 @@ public class OrderServiceImpl implements IOrderService {
             order.setCreatedAt(Instant.now());
             order.setOrderStatus(orderStatusRepository.findByName("PENDING"));
             order.setCustomer(customer);
+            order.setWaiterName(waiterName);
 
             savedOrder = orderRepository.save(order);
         }
@@ -163,7 +168,8 @@ public class OrderServiceImpl implements IOrderService {
                 mapCustomer(order.getCustomer()),
                 mapPaymentType(order.getPaymentType()),
                 order.getPaidAt() != null,
-                mapPayments(order.getId())
+                mapPayments(order.getId()),
+                order.getWaiterName()
         );
     }
 
@@ -188,7 +194,8 @@ public class OrderServiceImpl implements IOrderService {
                         .sorted(Comparator.comparing(OrderItem::getId).reversed())
                         .map(this::mapOrderItem)
                         .toList(),
-                mapPayments(order.getId())
+                mapPayments(order.getId()),
+                order.getWaiterName()
         );
     }
 
@@ -216,13 +223,14 @@ public class OrderServiceImpl implements IOrderService {
                 order.getOrderItems().stream()
                         .map(this::mapOrderItem)
                         .toList(),
-                mapPayments(order.getId())
+                mapPayments(order.getId()),
+                order.getWaiterName()
         );
     }
 
     @Transactional
     @Override
-    public void updateOrderStatus(Long orderId, String status, List<PaymentLine> payments) {
+    public PaymentResultResponse updateOrderStatus(Long orderId, String status, List<PaymentLine> payments) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
 
@@ -241,9 +249,10 @@ public class OrderServiceImpl implements IOrderService {
 
         order.setOrderStatus(newStatus);
 
+        PaymentResultResponse paymentResult = null;
         if ("COMPLETED".equalsIgnoreCase(status)) {
             if (payments != null && !payments.isEmpty()) {
-                applyPayments(order, payments);
+                paymentResult = applyPayments(order, payments);
             } else if (order.getCustomer() != null) {
                 // Fiado: served and the table is freed, but billed to the customer's
                 // open tab — stays unpaid until settled later (payOrder/settleCustomerTab).
@@ -276,11 +285,13 @@ public class OrderServiceImpl implements IOrderService {
             Optional.ofNullable(order.getDiningTable()).ifPresent(diningTable ->
                     tableService.updateTableStatus(diningTable, "OPEN"));
         }
+
+        return paymentResult;
     }
 
     @Transactional
     @Override
-    public void payOrder(Long orderId, List<PaymentLine> payments) {
+    public PaymentResultResponse payOrder(Long orderId, List<PaymentLine> payments) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
 
@@ -291,14 +302,22 @@ public class OrderServiceImpl implements IOrderService {
             throw new IllegalStateException("Este pedido ya fue pagado.");
         }
 
-        applyPayments(order, payments);
+        PaymentResultResponse result = applyPayments(order, payments);
         orderRepository.save(order);
+        return result;
     }
 
-    /** Registra uno o más pagos (ej. una parte en efectivo, el resto por transferencia)
+    /**
+     * Registra uno o más pagos (ej. una parte en efectivo, el resto por transferencia)
      * contra un pedido y lo marca pagado — usado por payOrder y por el cobro directo en
-     * updateOrderStatus. Exige que la suma coincida exactamente con el total a cobrar. */
-    private void applyPayments(Order order, List<PaymentLine> payments) {
+     * updateOrderStatus.
+     *
+     * <p>Acepta que el cliente pague de más: lo que sobra del total se devuelve como
+     * cambio y NO se registra en caja. Los pagos se aplican en orden hasta cubrir el
+     * total; una línea que quede por encima entra recortada (o no entra, si el total ya
+     * estaba cubierto). Si los pagos no alcanzan el total, sí falla.
+     */
+    private PaymentResultResponse applyPayments(Order order, List<PaymentLine> payments) {
         if (payments == null || payments.isEmpty()) {
             throw new IllegalStateException("Debes indicar al menos un método de pago.");
         }
@@ -307,22 +326,31 @@ public class OrderServiceImpl implements IOrderService {
         }
 
         long due = order.getTotal() != null ? order.getTotal().amount() : 0L;
-        long sum = payments.stream().mapToLong(PaymentLine::amount).sum();
-        if (sum != due) {
+        long tendered = payments.stream().mapToLong(PaymentLine::amount).sum();
+        if (tendered < due) {
             throw new IllegalStateException(
-                    "La suma de los pagos (" + sum + ") no coincide con el total a cobrar (" + due + ").");
+                    "Los pagos (" + tendered + ") no alcanzan el total a cobrar (" + due + ").");
         }
 
         Instant now = Instant.now();
         List<PaymentType> resolvedTypes = new ArrayList<>();
+        long remaining = due;
         for (PaymentLine line : payments) {
+            long applied = Math.min(line.amount(), remaining);
+            remaining -= applied;
+            if (applied <= 0) {
+                // El total ya estaba cubierto por las líneas anteriores — esta línea fue
+                // toda vuelto (efectivo que se devuelve), no se registra.
+                continue;
+            }
+
             PaymentType paymentType = paymentTypeService.getPaymentTypeById(line.paymentTypeId());
             resolvedTypes.add(paymentType);
 
             OrderPayment payment = new OrderPayment();
             payment.setOrder(order);
             payment.setPaymentType(paymentType);
-            payment.setAmount(Money.of(line.amount()));
+            payment.setAmount(Money.of(applied));
             payment.setPaidAt(now);
             orderPaymentRepository.save(payment);
         }
@@ -331,6 +359,7 @@ public class OrderServiceImpl implements IOrderService {
         // order.paymentType); dos o más -> queda null, el desglose real vive en payments.
         order.setPaymentType(resolvedTypes.size() == 1 ? resolvedTypes.get(0) : null);
         order.setPaidAt(now);
+        return new PaymentResultResponse(due, tendered, tendered - due);
     }
 
     @Transactional
@@ -365,6 +394,7 @@ public class OrderServiceImpl implements IOrderService {
         tabOrder.setDiningTable(order.getDiningTable());
         tabOrder.setOrderStatus(orderStatusRepository.findByName("COMPLETED"));
         tabOrder.setCustomer(customer);
+        tabOrder.setWaiterName(order.getWaiterName());
         tabOrder = orderRepository.save(tabOrder);
 
         long movedTotal = 0L;
@@ -654,5 +684,25 @@ public class OrderServiceImpl implements IOrderService {
                 orderType.getId(),
                 orderType.getName()
         );
+    }
+
+    /**
+     * Nombre del mesero que está creando el pedido — se guarda como texto en la orden
+     * (no como FK) para que quede fijo en el histórico aunque el usuario cambie luego
+     * su nombre o lo eliminen. Usa el displayName del usuario; si por algo no se
+     * encuentra, cae al correo antes que dejarlo en blanco.
+     */
+    private String currentWaiterName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal() instanceof String email)) {
+            throw new BadCredentialsException("Session expired or not authenticated");
+        }
+
+        return userRepository.findByEmail(email)
+                .map(User::getDisplayName)
+                .filter(name -> name != null && !name.isBlank())
+                .orElse(email);
     }
 }

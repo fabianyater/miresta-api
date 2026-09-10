@@ -56,12 +56,10 @@ public class OrderController {
 
     @PatchMapping("/{orderId}/status")
     @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
-    public ResponseEntity<Void> updateOrderStatus(
+    public ResponseEntity<PaymentResultResponse> updateOrderStatus(
             @RequestBody UpdateStatusRequest request,
             @PathVariable Long orderId) {
-        orderService.updateOrderStatus(orderId, request.status(), request.payments());
-
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(orderService.updateOrderStatus(orderId, request.status(), request.payments()));
     }
 
     @GetMapping("/reports/payment-totals")
@@ -80,9 +78,9 @@ public class OrderController {
 
     @PatchMapping("/{orderId}/pay")
     @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
-    public ResponseEntity<Void> payOrder(@PathVariable Long orderId, @RequestBody PayOrderRequest request) {
-        orderService.payOrder(orderId, request.payments());
-        return ResponseEntity.ok().build();
+    public ResponseEntity<PaymentResultResponse> payOrder(
+            @PathVariable Long orderId, @RequestBody PayOrderRequest request) {
+        return ResponseEntity.ok(orderService.payOrder(orderId, request.payments()));
     }
 
     @PatchMapping("/{orderId}/fiar-cliente")

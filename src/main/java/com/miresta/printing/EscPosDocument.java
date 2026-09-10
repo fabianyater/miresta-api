@@ -11,15 +11,18 @@ import java.util.List;
  * these are well-known, stable byte sequences.
  *
  * Alongside the raw byte stream, it keeps a parallel structured line list (text +
- * bold/center/rule flags) — the only way to also render a preview of the same ticket
- * (used when there's no real printer to send it to) without reverse-parsing ESC/POS
- * bytes.
+ * bold/center/rule/big flags) — the only way to also render a preview of the same
+ * ticket (used when there's no real printer to send it to) without reverse-parsing
+ * ESC/POS bytes.
  */
 public class EscPosDocument {
 
     private static final Charset PRINTER_CHARSET = Charset.forName("ISO-8859-1");
 
-    public record Line(String text, boolean bold, boolean center, boolean rule) {
+    /** Ancho útil en caracteres de una impresora térmica de 58mm con la fuente A. */
+    public static final int WIDTH = 32;
+
+    public record Line(String text, boolean bold, boolean center, boolean rule, boolean big) {
     }
 
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -53,8 +56,35 @@ public class EscPosDocument {
     public EscPosDocument line(String text) {
         out.writeBytes(text.getBytes(PRINTER_CHARSET));
         out.writeBytes(new byte[]{0x0A});
-        lines.add(new Line(text, boldOn, centerOn, false));
+        lines.add(new Line(text, boldOn, centerOn, false, false));
         return this;
+    }
+
+    /**
+     * Línea de título — texto a doble alto y ancho en la impresora real, y marcada
+     * como {@code big} para que la vista previa la muestre más grande.
+     */
+    public EscPosDocument title(String text) {
+        out.writeBytes(new byte[]{0x1D, 0x21, 0x11}); // GS ! — double width + height
+        out.writeBytes(new byte[]{0x1B, 0x45, 1});    // bold on
+        out.writeBytes(text.getBytes(PRINTER_CHARSET));
+        out.writeBytes(new byte[]{0x0A});
+        out.writeBytes(new byte[]{0x1B, 0x45, (byte) (boldOn ? 1 : 0)});
+        out.writeBytes(new byte[]{0x1D, 0x21, 0x00}); // reset size
+        lines.add(new Line(text, true, centerOn, false, true));
+        return this;
+    }
+
+    /**
+     * Fila de dos columnas: {@code left} pegado a la izquierda y {@code right} alineado
+     * a la derecha, rellenando con espacios hasta el ancho del papel. Si no caben en
+     * una línea, se dejan separados por un espacio y la impresora hace el wrap.
+     */
+    public EscPosDocument row(String left, String right) {
+        String l = left == null ? "" : left;
+        String r = right == null ? "" : right;
+        int gap = WIDTH - l.length() - r.length();
+        return line(gap > 0 ? l + " ".repeat(gap) + r : l + " " + r);
     }
 
     public EscPosDocument blankLine() {
@@ -62,8 +92,8 @@ public class EscPosDocument {
     }
 
     public EscPosDocument rule() {
-        line("--------------------------------");
-        lines.set(lines.size() - 1, new Line("", boldOn, centerOn, true));
+        line("-".repeat(WIDTH));
+        lines.set(lines.size() - 1, new Line("", boldOn, centerOn, true, false));
         return this;
     }
 

@@ -19,6 +19,14 @@ public class User {
     @Column(name = "email", nullable = false, unique = true)
     private String email;
 
+    @Column(name = "name", nullable = false)
+    private String name;
+
+    // Nombre corto para el badge de Pedidos y el ticket impreso — si no se indica,
+    // se deriva del nombre completo al crear/editar el usuario.
+    @Column(name = "display_name", nullable = false)
+    private String displayName;
+
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 

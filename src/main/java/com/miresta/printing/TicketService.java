@@ -4,25 +4,36 @@ import com.miresta.order.IOrderService;
 import com.miresta.order.Order;
 import com.miresta.order.OrderItem;
 import com.miresta.order.OrderItemSelection;
+import com.miresta.order.OrderPaymentRepository;
+import com.miresta.order.OrderPaymentResponse;
 import com.miresta.order.OrderRepository;
 import com.miresta.order.pricing.PricingCalculator;
 import com.miresta.shared.ComboCategory;
+import com.miresta.shared.Money;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RequiredArgsConstructor
 @Service
 public class TicketService {
 
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter HOUR_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    private static final String RESTAURANT_LINE_1 = "Restaurante Tradición";
+    private static final String RESTAURANT_LINE_2 = "Leña y Carbón";
 
     // Orden de impresión de un plato — sopas primero, luego principios, proteínas,
     // acompañantes y el resto (adicionales/bebidas/especiales) al final, sin importar
@@ -39,28 +50,45 @@ public class TicketService {
         PRINT_ORDER.put(ComboCategory.ESPECIAL, 6);
     }
 
+    // Nombre legible de cómo priceó el plato — espejo de COMBO_LABELS del frontend.
+    private static final Map<String, String> COMBO_LABELS = Map.ofEntries(
+            Map.entry("ALMUERZO_COMPLETO", "Almuerzo completo"),
+            Map.entry("ALMUERZO_BANDEJA", "Bandeja"),
+            Map.entry("DESAYUNO_COMPLETO", "Desayuno completo"),
+            Map.entry("DESAYUNO_BANDEJA", "Bandeja"),
+            Map.entry("ESPECIAL_COMPLETO", "Especial"),
+            Map.entry("SOLO_SOPA", "Solo sopa"),
+            Map.entry("SOLO_PROTEINA", "Solo proteína"),
+            Map.entry("SOLO_ACOMPANANTE", "Solo acompañante"),
+            Map.entry("SUELTOS", "Sueltos"));
+
     private final OrderRepository orderRepository;
+    private final OrderPaymentRepository orderPaymentRepository;
     private final IOrderService orderService;
     private final TicketPrinter ticketPrinter;
     private final PrinterSettingService printerSettingService;
     private final PricingCalculator pricingCalculator;
 
+    /** Comanda de cocina — sin precios, con el mesero, la mesa y el detalle de cada plato. */
     public TicketPreviewResponse printComanda(Long orderId) {
         Order order = getOrder(orderId);
 
-        EscPosDocument doc = new EscPosDocument()
-                .center().bold(true).line("COMANDA").bold(false)
-                .line(tableLabel(order))
-                .line(TIME_FORMAT.format(order.getCreatedAt().atZone(java.time.ZoneId.of("America/Bogota"))));
-
+        EscPosDocument doc = new EscPosDocument().left();
+        doc.title("Comanda #" + order.getId());
+        doc.blankLine();
+        doc.line(RESTAURANT_LINE_1);
+        doc.line(RESTAURANT_LINE_2);
+        doc.line(DATE_TIME_FORMAT.format(order.getCreatedAt().atZone(BOGOTA)));
+        doc.line(tableLabel(order));
+        doc.rule();
+        doc.line(field("Mesero", nvl(order.getWaiterName())));
         if (order.getCustomer() != null) {
-            doc.line("Cliente: " + order.getCustomer().getName());
+            doc.line(field("Cliente", order.getCustomer().getName()));
         }
-
-        doc.rule().left();
+        doc.rule();
 
         for (OrderItem item : order.getOrderItems()) {
-            doc.bold(true).line(item.getMenuOffering().getFoodType().getName()).bold(false);
+            doc.bold(true).line(itemLabel(item).toUpperCase(Locale.ROOT)).bold(false);
 
             for (OrderItemSelection selection : sortedByPrintOrder(item)) {
                 doc.line("  " + selection.getQuantity() + "x " + selection.getProduct().getName());
@@ -72,69 +100,93 @@ public class TicketService {
             doc.blankLine();
         }
 
-        doc.cut();
+        doc.rule().cut();
         return finish("Comanda", doc);
     }
 
+    /** Recibo de pago para el cliente — encabezado del restaurante, detalle con precios,
+     * total y método(s) de pago (o "pendiente de pago" si aún no se ha cobrado). */
     public TicketPreviewResponse printCuenta(Long orderId) {
         Order order = getOrder(orderId);
+        List<OrderPaymentResponse> payments = mapPayments(order.getId());
 
-        EscPosDocument doc = new EscPosDocument()
-                .center().bold(true).line("CUENTA").bold(false)
-                .line(tableLabel(order))
-                .line(TIME_FORMAT.format(order.getCreatedAt().atZone(java.time.ZoneId.of("America/Bogota"))));
+        EscPosDocument doc = new EscPosDocument().center();
+        doc.title("RECIBO DE PAGO");
+        doc.line(RESTAURANT_LINE_1);
+        doc.line(RESTAURANT_LINE_2);
+        doc.blankLine();
 
+        doc.left();
+        doc.row("Recibo #" + order.getId(), DATE_FORMAT.format(order.getCreatedAt().atZone(BOGOTA)));
+        doc.row(tableLabel(order), HOUR_FORMAT.format(order.getCreatedAt().atZone(BOGOTA)));
+        doc.line(field("Mesero", nvl(order.getWaiterName())));
         if (order.getCustomer() != null) {
-            doc.line("Cliente: " + order.getCustomer().getName());
+            doc.line(field("Cliente", order.getCustomer().getName()));
         }
-
-        doc.rule().left();
+        doc.rule();
+        doc.bold(true).row("Descripción", "Precio").bold(false);
+        doc.rule();
 
         for (OrderItem item : order.getOrderItems()) {
-            doc.line(item.getMenuOffering().getFoodType().getName() + " - " + money(item.getTotal()));
+            doc.row(itemLabel(item), money(item.getTotal()));
             for (OrderItemSelection selection : sortedByPrintOrder(item)) {
                 doc.line("  " + selection.getQuantity() + "x " + selection.getProduct().getName());
             }
         }
 
-        doc.rule()
-                .line("Subtotal: " + money(order.getSubtotal()))
-                .bold(true).line("Total: " + money(order.getTotal())).bold(false)
-                .cut();
+        doc.rule();
+        doc.row("Subtotal", money(order.getSubtotal()));
+        doc.bold(true).row("TOTAL", money(order.getTotal())).bold(false);
+        doc.rule();
 
-        return finish("Cuenta", doc);
+        if (payments.isEmpty()) {
+            doc.center().bold(true).line("PENDIENTE DE PAGO").bold(false).left();
+        } else {
+            for (OrderPaymentResponse payment : payments) {
+                doc.row(payment.paymentTypeName(), money(Money.of(payment.amount())));
+            }
+        }
+
+        doc.blankLine();
+        doc.center().line("¡Gracias por su visita!");
+        doc.cut();
+
+        return finish("Recibo de pago", doc);
     }
 
     public TicketPreviewResponse printResumenDelDia(LocalDate date) {
         var totals = orderService.getPaymentTotals(date);
 
-        EscPosDocument doc = new EscPosDocument()
-                .center().bold(true).line("RESUMEN DEL DIA").bold(false)
-                .line(date.toString())
-                .rule()
-                .left();
+        EscPosDocument doc = new EscPosDocument().center();
+        doc.title("RESUMEN DEL DÍA");
+        doc.line(RESTAURANT_LINE_1);
+        doc.line(date.format(DATE_FORMAT));
+        doc.blankLine();
+        doc.left().rule();
 
         long grandTotal = 0L;
         long orderCount = 0L;
 
         for (var row : totals) {
-            doc.line(row.paymentTypeName() + ": " + row.orderCount() + " pedidos - " + money(row.total()));
+            doc.row(row.paymentTypeName() + " (" + row.orderCount() + ")", money(row.total()));
             grandTotal += row.total().amount();
             orderCount += row.orderCount();
         }
 
-        doc.rule()
-                .line("Pedidos: " + orderCount)
-                .bold(true).line("Total: " + money(com.miresta.shared.Money.of(grandTotal))).bold(false)
-                .cut();
+        doc.rule();
+        doc.row("Pedidos", String.valueOf(orderCount));
+        doc.bold(true).row("TOTAL", money(Money.of(grandTotal))).bold(false);
+        doc.cut();
 
         return finish("Resumen del día", doc);
     }
 
-    /** Envía el documento a la impresora real solo si la impresión está activada en su
+    /**
+     * Envía el documento a la impresora real solo si la impresión está activada en su
      * configuración — si no, no falla ni bloquea nada, solo no imprime de verdad. En
      * ambos casos arma la vista previa a partir de las mismas líneas, para desarrollo
-     * sin impresora o para revisar el diseño sin gastar papel. */
+     * sin impresora o para revisar el diseño sin gastar papel.
+     */
     private TicketPreviewResponse finish(String title, EscPosDocument doc) {
         boolean printed = false;
         if (printerSettingService.isPrintingEnabled()) {
@@ -143,18 +195,34 @@ public class TicketService {
         }
 
         var lines = doc.lines().stream()
-                .map(l -> new TicketLineResponse(l.text(), l.bold(), l.center(), l.rule()))
+                .map(l -> new TicketLineResponse(l.text(), l.bold(), l.center(), l.rule(), l.big()))
                 .toList();
         return new TicketPreviewResponse(title, printed, lines);
     }
 
-    /** Sopas, luego principios, proteínas y acompañantes, el resto al final — por el
+    /**
+     * Sopas, luego principios, proteínas y acompañantes, el resto al final — por el
      * rol que la selección realmente cumple (un huevo "por principio" imprime junto a
-     * los principios, no donde caería su categoría cruda de catálogo). */
+     * los principios, no donde caería su categoría cruda de catálogo).
+     */
     private List<OrderItemSelection> sortedByPrintOrder(OrderItem item) {
         return item.getOrderItemSelections().stream()
                 .sorted(Comparator.comparingInt(
                         s -> PRINT_ORDER.getOrDefault(pricingCalculator.effectiveCategoryFor(s), 99)))
+                .toList();
+    }
+
+    private String itemLabel(OrderItem item) {
+        String combo = item.getComboLabel();
+        if (combo != null && COMBO_LABELS.containsKey(combo)) {
+            return COMBO_LABELS.get(combo);
+        }
+        return item.getMenuOffering().getFoodType().getName();
+    }
+
+    private List<OrderPaymentResponse> mapPayments(Long orderId) {
+        return orderPaymentRepository.findByOrder_IdOrderByPaidAtAsc(orderId).stream()
+                .map(p -> new OrderPaymentResponse(p.getPaymentType().getName(), p.getAmount().amount()))
                 .toList();
     }
 
@@ -169,7 +237,17 @@ public class TicketService {
                 : "Para llevar";
     }
 
-    private String money(com.miresta.shared.Money money) {
-        return "$" + (money != null ? money.amount() : 0L);
+    /** "Etiqueta   valor" con la etiqueta a ancho fijo, para alinear el bloque de datos. */
+    private static String field(String label, String value) {
+        return String.format("%-8s %s", label, value);
+    }
+
+    private static String nvl(String value) {
+        return value == null || value.isBlank() ? "-" : value;
+    }
+
+    private String money(Money money) {
+        long amount = money != null ? money.amount() : 0L;
+        return String.format(Locale.US, "$%,d", amount).replace(',', '.');
     }
 }

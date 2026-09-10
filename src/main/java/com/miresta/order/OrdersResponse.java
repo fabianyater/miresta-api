@@ -20,5 +20,6 @@ public record OrdersResponse(
         // null y el desglose real vive en `payments`.
         PaymentTypeResponse paymentType,
         boolean paid,
-        List<OrderPaymentResponse> payments) {
+        List<OrderPaymentResponse> payments,
+        String waiterName) {
 }
