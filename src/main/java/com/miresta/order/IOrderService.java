@@ -35,6 +35,8 @@ public interface IOrderService {
 
     List<CustomerBalanceResponse> getCustomerBalances();
 
+    List<CustomerPaymentResponse> getCustomerPayments(Long customerId);
+
     List<PaymentTotalResponse> getPaymentTotals(LocalDate date);
 
     DailyReportResponse getDailyReport(LocalDate date);

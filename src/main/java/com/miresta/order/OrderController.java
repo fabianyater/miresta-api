@@ -102,4 +102,10 @@ public class OrderController {
     public ResponseEntity<List<CustomerBalanceResponse>> getCustomerBalances() {
         return ResponseEntity.ok(orderService.getCustomerBalances());
     }
+
+    @GetMapping("/customers/{customerId}/payments")
+    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    public ResponseEntity<List<CustomerPaymentResponse>> getCustomerPayments(@PathVariable Long customerId) {
+        return ResponseEntity.ok(orderService.getCustomerPayments(customerId));
+    }
 }

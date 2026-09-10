@@ -473,6 +473,38 @@ public class OrderServiceImpl implements IOrderService {
         return new SettleTabResponse(pending.size(), Money.of(totalPaid));
     }
 
+    @Transactional(readOnly = true)
+    @Override
+    public List<CustomerPaymentResponse> getCustomerPayments(Long customerId) {
+        // Se agrupan por (momento del cobro, método): un pago de cuenta genera varias
+        // filas OrderPayment con el mismo instante y método; pagar un pedido suelto es
+        // su propio grupo.
+        Map<String, List<OrderPayment>> groups = new LinkedHashMap<>();
+        for (OrderPayment payment : orderPaymentRepository.findByOrder_Customer_IdOrderByPaidAtDesc(customerId)) {
+            String key = payment.getPaidAt() + "|" + payment.getPaymentType().getName();
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(payment);
+        }
+
+        List<CustomerPaymentResponse> result = new ArrayList<>();
+        for (List<OrderPayment> group : groups.values()) {
+            long total = group.stream().mapToLong(p -> p.getAmount() != null ? p.getAmount().amount() : 0L).sum();
+            List<CustomerPaymentResponse.PaidOrder> orders = group.stream()
+                    .map(p -> new CustomerPaymentResponse.PaidOrder(
+                            p.getOrder().getId(),
+                            p.getOrder().getCreatedAt(),
+                            p.getAmount(),
+                            mapDiningTable(p.getOrder().getDiningTable())))
+                    .toList();
+            result.add(new CustomerPaymentResponse(
+                    group.get(0).getPaidAt(),
+                    group.get(0).getPaymentType().getName(),
+                    Money.of(total),
+                    orders));
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
     @Override
     public List<CustomerBalanceResponse> getCustomerBalances() {
         return orderRepository.findCustomerBalances().stream()

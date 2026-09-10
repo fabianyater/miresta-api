@@ -10,6 +10,8 @@ import java.util.List;
 public interface OrderPaymentRepository extends JpaRepository<OrderPayment, Long> {
     List<OrderPayment> findByOrder_IdOrderByPaidAtAsc(Long orderId);
 
+    List<OrderPayment> findByOrder_Customer_IdOrderByPaidAtDesc(Long customerId);
+
     @Query("""
         select new com.miresta.order.PaymentTotalRow(pt.name, count(distinct op.order.id), sum(op.amount.amount))
         from OrderPayment op join op.paymentType pt
