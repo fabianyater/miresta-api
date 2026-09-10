@@ -1,5 +1,6 @@
 package com.miresta.order;
 
+import com.miresta.catalog.ProductBatchServiceImpl;
 import com.miresta.customer.Customer;
 import com.miresta.customer.CustomerResponse;
 import com.miresta.customer.ICustomerService;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +43,10 @@ public class OrderServiceImpl implements IOrderService {
     private final OrderItemSelectionsImpl orderItemSelectionsService;
     private final TableServiceImpl tableService;
     private final MenuItemServiceImpl menuItemService;
+    private final ProductBatchServiceImpl productBatchService;
     private final OrderItemRepository orderItemRepository;
     private final OrderItemSelectionsRepository orderItemSelectionsRepository;
+    private final OrderPaymentRepository orderPaymentRepository;
     private final PricingCalculator pricingCalculator;
 
     @Transactional
@@ -158,7 +162,8 @@ public class OrderServiceImpl implements IOrderService {
                 mapOrderStatus(order.getOrderStatus()),
                 mapCustomer(order.getCustomer()),
                 mapPaymentType(order.getPaymentType()),
-                order.getPaidAt() != null
+                order.getPaidAt() != null,
+                mapPayments(order.getId())
         );
     }
 
@@ -182,7 +187,8 @@ public class OrderServiceImpl implements IOrderService {
                 order.getOrderItems().stream()
                         .sorted(Comparator.comparing(OrderItem::getId).reversed())
                         .map(this::mapOrderItem)
-                        .toList()
+                        .toList(),
+                mapPayments(order.getId())
         );
     }
 
@@ -209,13 +215,14 @@ public class OrderServiceImpl implements IOrderService {
                 order.getPaidAt() != null,
                 order.getOrderItems().stream()
                         .map(this::mapOrderItem)
-                        .toList()
+                        .toList(),
+                mapPayments(order.getId())
         );
     }
 
     @Transactional
     @Override
-    public void updateOrderStatus(Long orderId, String status, Long paymentTypeId) {
+    public void updateOrderStatus(Long orderId, String status, List<PaymentLine> payments) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
 
@@ -235,9 +242,8 @@ public class OrderServiceImpl implements IOrderService {
         order.setOrderStatus(newStatus);
 
         if ("COMPLETED".equalsIgnoreCase(status)) {
-            if (paymentTypeId != null) {
-                order.setPaymentType(paymentTypeService.getPaymentTypeById(paymentTypeId));
-                order.setPaidAt(Instant.now());
+            if (payments != null && !payments.isEmpty()) {
+                applyPayments(order, payments);
             } else if (order.getCustomer() != null) {
                 // Fiado: served and the table is freed, but billed to the customer's
                 // open tab — stays unpaid until settled later (payOrder/settleCustomerTab).
@@ -257,11 +263,12 @@ public class OrderServiceImpl implements IOrderService {
         }
 
         if ("CANCELLED".equalsIgnoreCase(status) && !wasAlreadyCancelled) {
-            // Symmetric to the consume() call in OrderItemSelectionsImpl#createOrderItemSelection —
-            // give back whatever menu-item stock this order had reserved.
+            // Symmetric to the consume() calls in OrderItemSelectionsImpl#createOrderItemSelection —
+            // give back whatever menu-item and lote stock this order had reserved.
             for (OrderItem item : orderItemService.getOrderItemsByOrder(order)) {
                 for (OrderItemSelection selection : orderItemSelectionsService.getOrderItemSelectionByOrderItem(item)) {
                     menuItemService.restore(item.getMenuOffering(), selection.getProduct(), selection.getQuantity());
+                    productBatchService.restore(selection.getProduct(), selection.getQuantity());
                 }
             }
 
@@ -273,7 +280,7 @@ public class OrderServiceImpl implements IOrderService {
 
     @Transactional
     @Override
-    public void payOrder(Long orderId, Long paymentTypeId) {
+    public void payOrder(Long orderId, List<PaymentLine> payments) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found with id: " + orderId));
 
@@ -283,13 +290,47 @@ public class OrderServiceImpl implements IOrderService {
         if (order.getPaidAt() != null) {
             throw new IllegalStateException("Este pedido ya fue pagado.");
         }
-        if (paymentTypeId == null) {
-            throw new IllegalStateException("Debes indicar un método de pago.");
+
+        applyPayments(order, payments);
+        orderRepository.save(order);
+    }
+
+    /** Registra uno o más pagos (ej. una parte en efectivo, el resto por transferencia)
+     * contra un pedido y lo marca pagado — usado por payOrder y por el cobro directo en
+     * updateOrderStatus. Exige que la suma coincida exactamente con el total a cobrar. */
+    private void applyPayments(Order order, List<PaymentLine> payments) {
+        if (payments == null || payments.isEmpty()) {
+            throw new IllegalStateException("Debes indicar al menos un método de pago.");
+        }
+        if (payments.stream().anyMatch(p -> p.amount() == null || p.amount() <= 0)) {
+            throw new IllegalStateException("Cada pago debe tener un monto mayor a 0.");
         }
 
-        order.setPaymentType(paymentTypeService.getPaymentTypeById(paymentTypeId));
-        order.setPaidAt(Instant.now());
-        orderRepository.save(order);
+        long due = order.getTotal() != null ? order.getTotal().amount() : 0L;
+        long sum = payments.stream().mapToLong(PaymentLine::amount).sum();
+        if (sum != due) {
+            throw new IllegalStateException(
+                    "La suma de los pagos (" + sum + ") no coincide con el total a cobrar (" + due + ").");
+        }
+
+        Instant now = Instant.now();
+        List<PaymentType> resolvedTypes = new ArrayList<>();
+        for (PaymentLine line : payments) {
+            PaymentType paymentType = paymentTypeService.getPaymentTypeById(line.paymentTypeId());
+            resolvedTypes.add(paymentType);
+
+            OrderPayment payment = new OrderPayment();
+            payment.setOrder(order);
+            payment.setPaymentType(paymentType);
+            payment.setAmount(Money.of(line.amount()));
+            payment.setPaidAt(now);
+            orderPaymentRepository.save(payment);
+        }
+
+        // Un solo método -> se refleja también aquí (compatibilidad con lo que ya leía
+        // order.paymentType); dos o más -> queda null, el desglose real vive en payments.
+        order.setPaymentType(resolvedTypes.size() == 1 ? resolvedTypes.get(0) : null);
+        order.setPaidAt(now);
     }
 
     @Transactional
@@ -383,9 +424,18 @@ public class OrderServiceImpl implements IOrderService {
         long totalPaid = 0L;
 
         for (Order order : pending) {
+            long amount = order.getTotal() != null ? order.getTotal().amount() : 0L;
+
+            OrderPayment payment = new OrderPayment();
+            payment.setOrder(order);
+            payment.setPaymentType(paymentType);
+            payment.setAmount(Money.of(amount));
+            payment.setPaidAt(now);
+            orderPaymentRepository.save(payment);
+
             order.setPaymentType(paymentType);
             order.setPaidAt(now);
-            totalPaid += order.getTotal() != null ? order.getTotal().amount() : 0L;
+            totalPaid += amount;
         }
 
         orderRepository.saveAll(pending);
@@ -409,7 +459,7 @@ public class OrderServiceImpl implements IOrderService {
         Instant from = date.atStartOfDay(RESTAURANT_ZONE).toInstant();
         Instant to = date.plusDays(1).atStartOfDay(RESTAURANT_ZONE).toInstant();
 
-        return orderRepository.findPaymentTotals(from, to).stream()
+        return orderPaymentRepository.findPaymentTotals(from, to).stream()
                 .map(row -> new PaymentTotalResponse(
                         row.paymentTypeName() != null ? row.paymentTypeName() : "Sin especificar",
                         row.orderCount(),
@@ -496,6 +546,34 @@ public class OrderServiceImpl implements IOrderService {
         return new CustomerResponse(customer.getId(), customer.getName(), customer.getPhone(), customer.isActive());
     }
 
+    private static final Map<ComboCategory, String> COMBO_CATEGORY_LABELS = Map.of(
+            ComboCategory.SOPA, "Sopas",
+            ComboCategory.PRINCIPIO, "Principios",
+            ComboCategory.PROTEINA, "Proteínas",
+            ComboCategory.ACOMPANANTE, "Acompañantes",
+            ComboCategory.ADICIONAL, "Adicionales",
+            ComboCategory.BEBIDA, "Bebidas",
+            ComboCategory.ESPECIAL, "Especiales",
+            ComboCategory.ENVASE, "Envases");
+
+    /** Agrupa por el rol que la selección realmente cumple — si tiene reemplazo (ej. un
+     * huevo, de categoría Proteínas, pedido "por principio"), se muestra bajo ese rol en
+     * vez de bajo su categoría cruda de catálogo, para que coincida con cómo se cobra. */
+    private String displayCategoryFor(OrderItemSelection selection) {
+        var rawCategory = selection.getProduct().getCategory();
+        ComboCategory effective = pricingCalculator.effectiveCategoryFor(selection);
+        if (rawCategory != null && effective == rawCategory.getCode()) {
+            return rawCategory.getName();
+        }
+        return COMBO_CATEGORY_LABELS.getOrDefault(effective, rawCategory != null ? rawCategory.getName() : "Sin categoría");
+    }
+
+    private List<OrderPaymentResponse> mapPayments(Long orderId) {
+        return orderPaymentRepository.findByOrder_IdOrderByPaidAtAsc(orderId).stream()
+                .map(p -> new OrderPaymentResponse(p.getPaymentType().getName(), p.getAmount().amount()))
+                .toList();
+    }
+
     private PaymentTypeResponse mapPaymentType(PaymentType paymentType) {
         if (paymentType == null) {
             return null;
@@ -515,11 +593,7 @@ public class OrderServiceImpl implements IOrderService {
                 : orderItem.getOrder().getCustomer();
 
         var groupedSelections = orderItem.getOrderItemSelections().stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        selection -> selection.getProduct().getCategory() != null
-                                ? selection.getProduct().getCategory().getName()
-                                : "Sin categoría"
-                ));
+                .collect(java.util.stream.Collectors.groupingBy(this::displayCategoryFor));
 
         List<GroupedOrderItemResponse> itemsByCategory = groupedSelections.entrySet().stream()
                 .map(entry -> new GroupedOrderItemResponse(

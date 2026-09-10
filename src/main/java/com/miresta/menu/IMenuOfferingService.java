@@ -14,6 +14,12 @@ public interface IMenuOfferingService {
      * duplicate offering instead of letting the admin edit it. */
     MenuOffering getOrCreateMenuOffering(Menu menu, String foodTypeName);
 
+    /** Get-or-create today's Menu and this foodType's offering under it — every OrderItem
+     * needs a MenuOffering to belong to, but bebidas don't actually depend on a configured
+     * menu, so ordering one when there's no menu at all yet (rather than failing, or
+     * silently creating an order with no items) creates an empty offering to hang it on. */
+    MenuOffering getOrCreateMenuOfferingForToday(String foodTypeName);
+
     List<MenuOffering> getOfferingsForMenu(Menu menu);
 
     void deleteMenuOffering(MenuOffering menuOffering);

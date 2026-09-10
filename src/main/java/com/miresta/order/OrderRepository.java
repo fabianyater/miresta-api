@@ -24,15 +24,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByCustomer_IdAndOrderStatus_NameAndPaidAtIsNull(Long customerId, String orderStatusName);
 
     @Query("""
-        select new com.miresta.order.PaymentTotalRow(pt.name, count(o), sum(o.total.amount))
-        from Order o left join o.paymentType pt
-        where o.paidAt is not null
-          and o.paidAt >= :from and o.paidAt < :to
-        group by pt.name
-    """)
-    List<PaymentTotalRow> findPaymentTotals(@Param("from") Instant from, @Param("to") Instant to);
-
-    @Query("""
         select new com.miresta.order.CustomerBalanceRow(c.id, c.name, count(o), sum(o.total.amount))
         from Order o join o.customer c
         where o.orderStatus.name = 'COMPLETED' and o.paidAt is null

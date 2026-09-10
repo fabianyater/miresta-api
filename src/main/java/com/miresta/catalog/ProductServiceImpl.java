@@ -18,7 +18,6 @@ public class ProductServiceImpl implements IProductService {
     private final ProductRepository productRepository;
     private final ProductDetailsRepository productDetailsRepository;
     private final CategoryServiceImpl categoryServiceImpl;
-    private final ProductDetailsServiceImpl productDetailsServiceImpl;
 
     @Transactional
     @Override
@@ -29,18 +28,7 @@ public class ProductServiceImpl implements IProductService {
         product.setName(productRequest.name());
         product.setCategory(category);
 
-        var savedProduct = productRepository.save(product);
-
-        if (productRequest.expirationDate() != null && productRequest.quantity() != null && productRequest.unitPrice() > 0) {
-            ProductDetails productDetails = new ProductDetails();
-
-            productDetails.setProduct(savedProduct);
-            productDetails.setQuantity(productRequest.quantity());
-            productDetails.setExpirationDate(productRequest.expirationDate());
-            productDetails.setPrice(Money.of(productRequest.unitPrice()));
-
-            productDetailsServiceImpl.createProductDetails(productDetails);
-        }
+        productRepository.save(product);
     }
 
     @Transactional
@@ -61,14 +49,11 @@ public class ProductServiceImpl implements IProductService {
         Product saved = productRepository.save(product);
 
         ProductDetails existing = saved.getProductDetails().stream().findFirst().orElse(null);
-        boolean hasDetail = request.expirationDate() != null || request.quantity() != null || request.unitPrice() != null;
 
-        if (hasDetail) {
+        if (request.unitPrice() != null) {
             ProductDetails details = existing != null ? existing : new ProductDetails();
             details.setProduct(saved);
-            details.setExpirationDate(request.expirationDate());
-            details.setQuantity(request.quantity());
-            details.setPrice(Money.of(request.unitPrice() != null ? request.unitPrice() : 0L));
+            details.setPrice(Money.of(request.unitPrice()));
             ProductDetails savedDetails = productDetailsRepository.save(details);
             if (existing == null) {
                 saved.getProductDetails().add(savedDetails);
@@ -131,8 +116,6 @@ public class ProductServiceImpl implements IProductService {
                 product.getCategory().getId(),
                 product.getCategory().getName(),
                 product.getActsAsCategory(),
-                d != null ? d.getExpirationDate() : null,
-                d != null ? d.getQuantity() : null,
                 d != null && d.getPrice() != null ? d.getPrice().amount() : null);
     }
 }

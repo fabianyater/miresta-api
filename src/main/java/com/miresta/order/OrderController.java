@@ -59,7 +59,7 @@ public class OrderController {
     public ResponseEntity<Void> updateOrderStatus(
             @RequestBody UpdateStatusRequest request,
             @PathVariable Long orderId) {
-        orderService.updateOrderStatus(orderId, request.status(), request.paymentTypeId());
+        orderService.updateOrderStatus(orderId, request.status(), request.payments());
 
         return ResponseEntity.ok().build();
     }
@@ -81,7 +81,7 @@ public class OrderController {
     @PatchMapping("/{orderId}/pay")
     @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
     public ResponseEntity<Void> payOrder(@PathVariable Long orderId, @RequestBody PayOrderRequest request) {
-        orderService.payOrder(orderId, request.paymentTypeId());
+        orderService.payOrder(orderId, request.payments());
         return ResponseEntity.ok().build();
     }
 

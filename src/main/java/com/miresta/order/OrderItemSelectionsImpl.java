@@ -1,6 +1,7 @@
 package com.miresta.order;
 
 import com.miresta.catalog.Product;
+import com.miresta.catalog.ProductBatchServiceImpl;
 import com.miresta.catalog.ProductServiceImpl;
 import com.miresta.catalog.ProductWithIdAndQuantity;
 import com.miresta.menu.MenuItemServiceImpl;
@@ -18,6 +19,7 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
     private final ProductServiceImpl productService;
     private final PricingCalculator pricingCalculator;
     private final MenuItemServiceImpl menuItemService;
+    private final ProductBatchServiceImpl productBatchService;
 
     @Override
     public List<OrderItemSelection> getOrderItemSelectionByOrderItem(OrderItem orderItem) {
@@ -39,6 +41,9 @@ public class OrderItemSelectionsImpl implements IOrderItemSelectionsService {
             // set) — throws if a limit was set and there isn't enough left, which rolls
             // back the whole order (createOrder is @Transactional).
             menuItemService.consume(orderItem.getMenuOffering(), product, it.quantity());
+            // Independiente del menú del día — para productos con lotes registrados (ej.
+            // bebidas), esto también rechaza el pedido si no alcanza el stock por lotes.
+            productBatchService.consume(product, it.quantity());
 
             OrderItemSelection selection = new OrderItemSelection();
             selection.setOrderItem(orderItem);

@@ -1,4 +1,6 @@
 package com.miresta.order;
 
-public record PayOrderRequest(Long paymentTypeId) {
+import java.util.List;
+
+public record PayOrderRequest(List<PaymentLine> payments) {
 }

@@ -13,15 +13,20 @@ public class PrinterSettingService {
 
     public PrinterSettingResponse get() {
         PrinterSetting setting = current();
-        return new PrinterSettingResponse(setting.getPrinterName());
+        return new PrinterSettingResponse(setting.getPrinterName(), setting.isPrintingEnabled());
     }
 
     @Transactional
     public PrinterSettingResponse update(UpdatePrinterSettingRequest request) {
         PrinterSetting setting = current();
         setting.setPrinterName(request.printerName());
+        setting.setPrintingEnabled(request.printingEnabled());
         printerSettingRepository.save(setting);
-        return new PrinterSettingResponse(setting.getPrinterName());
+        return new PrinterSettingResponse(setting.getPrinterName(), setting.isPrintingEnabled());
+    }
+
+    public boolean isPrintingEnabled() {
+        return current().isPrintingEnabled();
     }
 
     private PrinterSetting current() {

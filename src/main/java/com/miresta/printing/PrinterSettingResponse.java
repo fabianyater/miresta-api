@@ -1,4 +1,4 @@
 package com.miresta.printing;
 
-public record PrinterSettingResponse(String printerName) {
+public record PrinterSettingResponse(String printerName, boolean printingEnabled) {
 }

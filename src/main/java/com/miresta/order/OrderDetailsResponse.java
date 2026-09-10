@@ -16,7 +16,10 @@ public record OrderDetailsResponse(
         DiningTableResponse diningTable,
         OrderStatusDto orderStatus,
         CustomerResponse customer,
+        // Solo se llena cuando se pagó con un único método — con pagos divididos queda
+        // null y el desglose real vive en `payments`.
         PaymentTypeResponse paymentType,
         boolean paid,
-        List<OrderItemResponse> orderItems) {
+        List<OrderItemResponse> orderItems,
+        List<OrderPaymentResponse> payments) {
 }

@@ -16,23 +16,20 @@ public class PrintController {
 
     @PostMapping("/api/orders/{orderId}/print/comanda")
     @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
-    public ResponseEntity<Void> printComanda(@PathVariable Long orderId) {
-        ticketService.printComanda(orderId);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<TicketPreviewResponse> printComanda(@PathVariable Long orderId) {
+        return ResponseEntity.ok(ticketService.printComanda(orderId));
     }
 
     @PostMapping("/api/orders/{orderId}/print/cuenta")
     @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
-    public ResponseEntity<Void> printCuenta(@PathVariable Long orderId) {
-        ticketService.printCuenta(orderId);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<TicketPreviewResponse> printCuenta(@PathVariable Long orderId) {
+        return ResponseEntity.ok(ticketService.printCuenta(orderId));
     }
 
     @PostMapping("/api/reports/print/resumen")
     @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
-    public ResponseEntity<Void> printResumen(
+    public ResponseEntity<TicketPreviewResponse> printResumen(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        ticketService.printResumenDelDia(date);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ticketService.printResumenDelDia(date));
     }
 }

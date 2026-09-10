@@ -84,41 +84,52 @@ public class PricingCalculator {
         long soupCreditsFromRealSoup = 0L;
         long soupCreditsFromReplacement = 0L;
 
-        // Only PRINCIPIO-category selections count here — a principio filled via
-        // replacement (e.g. huevo "por principio") is priced through the ADICIONAL
-        // branch below instead, so it must not also be double-charged here.
+        // Solo un principio "real" (no cubierto por reemplazo) cuenta aquí — uno cubierto
+        // por reemplazo (ej. huevo "por principio") se cobra por su propio rol efectivo
+        // (ADICIONAL o el que sea), no como un 2do principio.
         long principleCreditsFromReal = 0L;
 
         for (OrderItemSelection s : selections) {
             long qty = s.getQuantity() != null ? s.getQuantity() : 1;
-            long extraPrice = s.getUnitExtraPrice() != null ? s.getUnitExtraPrice().amount() : 0L;
 
             Product product = s.getProduct();
             ComboCategory category = product.getCategory().getCode();
             String normalizedName = normalize(product.getName());
             boolean isEgg = normalizedName.startsWith("huevo");
             ComboCategory effective = effectiveCategory(s);
-            ComboCategory replacement = effective == category ? null : effective;
+            boolean isReplacement = effective != category;
 
-            // PROTEINA and ADICIONAL selections are priced through their own dedicated
-            // buckets below (proteinAdditionals / additionalsTotal), and ESPECIAL through
-            // basePrice's own per-unit multiplier — adding their unitExtraPrice here too
-            // would double-charge them.
-            boolean pricedElsewhere = category == ComboCategory.PROTEINA || category == ComboCategory.ADICIONAL
-                    || category == ComboCategory.ESPECIAL || replacement == ComboCategory.PROTEINA;
-            if (extraPrice > 0 && !pricedElsewhere) {
-                extrasTotal += extraPrice;
-            }
+            // Cada categoría que sí cobra "extra" más allá de lo que ya trae el combo lo
+            // hace por su propio total agregado más abajo (proteína/principio/adicional,
+            // especial por su multiplicador) — sopa y acompañante NO cobran extra por
+            // cantidad en una sola línea: pedir el doble de una guarnición en vez de otra
+            // distinta es repartir lo que el plato ya incluye, no un adicional. Por eso
+            // selection.unitExtraPrice ya no se suma aquí (antes duplicaba el cobro de
+            // principio/proteína y sobrecargaba una guarnición repetida sin motivo).
 
-            switch (category) {
+            // Se cuenta por el rol EFECTIVO (reemplazo explícito, luego "acts as" del
+            // producto, si no su propia categoría) — nunca por ambos a la vez. Antes se
+            // sumaba primero por la categoría cruda del producto y LUEGO otra vez por el
+            // reemplazo, así que un huevo (categoría Proteínas) marcado "por principio"
+            // se contaba como proteína real Y como principio, cobrando de más.
+            switch (effective) {
                 case SOPA -> {
                     soupCredits += qty;
-                    soupCreditsFromRealSoup += qty;
+                    if (isReplacement) {
+                        soupCreditsFromReplacement += qty;
+                    } else {
+                        soupCreditsFromRealSoup += qty;
+                    }
                 }
                 case PRINCIPIO -> {
                     principleCredits += qty;
-                    principleCreditsFromReal += qty;
-                    if (!isEgg) hasNonEggPrinciple = true;
+                    // Un principio cubierto por reemplazo (ej. huevo por principio) cuenta
+                    // para formar el combo, pero no como un principio "real" — no debe
+                    // sumar a la cuenta de "2do principio cobra adicional".
+                    if (!isReplacement) {
+                        principleCreditsFromReal += qty;
+                        if (!isEgg) hasNonEggPrinciple = true;
+                    }
                 }
                 case ACOMPANANTE -> {
                     sideCredits += qty;
@@ -128,10 +139,8 @@ public class PricingCalculator {
                 }
                 case PROTEINA -> proteinsByType.merge(extractProteinType(normalizedName), qty, Long::sum);
                 case ADICIONAL -> {
-                    if (replacement != ComboCategory.PROTEINA) {
-                        additionalsTotal += priceSettings.amountFor(acompananteAdicionCode(mealType)).amount() * qty;
-                        if (isEgg) eggAdditionals += qty;
-                    }
+                    additionalsTotal += priceSettings.amountFor(acompananteAdicionCode(mealType)).amount() * qty;
+                    if (isEgg) eggAdditionals += qty;
                 }
                 case BEBIDA -> drinksTotal += unitAmount(ComboCategory.BEBIDA, product, mealType).amount() * qty;
                 // A product in the ESPECIAL catalog category (Bandeja paisa, Sancocho de
@@ -140,20 +149,6 @@ public class PricingCalculator {
                 // to be "a full meal", so it gets its own credit toward forming the combo.
                 case ESPECIAL -> especialCredits += qty;
                 default -> {
-                }
-            }
-
-            if (replacement != null) {
-                switch (replacement) {
-                    case SOPA -> {
-                        soupCredits += qty;
-                        soupCreditsFromReplacement += qty;
-                    }
-                    case PRINCIPIO -> principleCredits += qty;
-                    case PROTEINA -> proteinsByType.merge(extractProteinType(normalizedName), qty, Long::sum);
-                    case ACOMPANANTE -> sideCredits += qty;
-                    default -> {
-                    }
                 }
             }
         }
@@ -281,6 +276,16 @@ public class PricingCalculator {
         if (kinds == 0) return null;
         if (kinds > 1) return "SUELTOS";
         return hasSoup ? "SOLO_SOPA" : hasProtein ? "SOLO_PROTEINA" : "SOLO_ACOMPANANTE";
+    }
+
+    /**
+     * The category a selection actually fills — public so display code (grouping an
+     * order for its detail/print view) can group by the role it's actually priced as
+     * instead of the product's raw catalog category, which is what {@link #priceOrderItem}
+     * itself keys on internally too.
+     */
+    public ComboCategory effectiveCategoryFor(OrderItemSelection selection) {
+        return effectiveCategory(selection);
     }
 
     /**

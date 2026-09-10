@@ -26,7 +26,12 @@ public class OrderItemServiceImpl implements IOrderItemService {
         OrderType orderType = orderTypeRepository.findByName(orderTypeName)
                 .orElseThrow(() -> new RuntimeException("Order type not found: " + orderTypeName));
 
-        MenuOffering menuOffering = menuOfferingService.getMenuOfferingByMenuIdAndFoodTypeName(menuId, mealType);
+        // Sin menú configurado para este tipo de comida todavía (típicamente: alguien pide
+        // solo una bebida, que no depende del menú del día) — en vez de fallar o dejar el
+        // pedido sin items, se crea/usa una oferta vacía de hoy para colgar el plato ahí.
+        MenuOffering menuOffering = menuId != null
+                ? menuOfferingService.getMenuOfferingByMenuIdAndFoodTypeName(menuId, mealType)
+                : menuOfferingService.getOrCreateMenuOfferingForToday(mealType);
         OrderItem orderItem = new OrderItem();
 
         orderItem.setOrder(order);

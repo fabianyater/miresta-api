@@ -5,6 +5,7 @@ import com.miresta.shared.Money;
 import com.miresta.table.DiningTableResponse;
 
 import java.time.Instant;
+import java.util.List;
 
 public record OrdersResponse(
         Long id,
@@ -15,6 +16,9 @@ public record OrdersResponse(
         DiningTableResponse diningTable,
         OrderStatusDto orderStatus,
         CustomerResponse customer,
+        // Solo se llena cuando se pagó con un único método — con pagos divididos queda
+        // null y el desglose real vive en `payments`.
         PaymentTypeResponse paymentType,
-        boolean paid) {
+        boolean paid,
+        List<OrderPaymentResponse> payments) {
 }

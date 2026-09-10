@@ -14,9 +14,9 @@ public interface IOrderService {
 
     OrderDetailsResponse getPendingOrderDetail(Long tableId);
 
-    void updateOrderStatus(Long orderId, String status, Long paymentTypeId);
+    void updateOrderStatus(Long orderId, String status, List<PaymentLine> payments);
 
-    void payOrder(Long orderId, Long paymentTypeId);
+    void payOrder(Long orderId, List<PaymentLine> payments);
 
     /**
      * Splits off every plato in this (still-pending) order that belongs to the given

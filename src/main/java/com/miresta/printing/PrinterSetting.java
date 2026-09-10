@@ -20,4 +20,10 @@ public class PrinterSetting {
 
     @Column(name = "printer_name", nullable = false)
     private String printerName;
+
+    /** Cuando está en false, los tickets no se envían de verdad a la impresora — solo
+     * se arma la vista previa. Útil en desarrollo sin impresora conectada, o si la
+     * impresora real está fuera de servicio y no se quiere bloquear la toma de pedidos. */
+    @Column(name = "printing_enabled", nullable = false)
+    private boolean printingEnabled = true;
 }

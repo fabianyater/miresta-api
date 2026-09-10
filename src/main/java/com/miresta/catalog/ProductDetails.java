@@ -5,8 +5,11 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDate;
-
+/**
+ * Precio de referencia/costo de un producto — puramente informativo, no lo que se
+ * cobra (eso vive en price-settings, por categoría). La cantidad y el vencimiento
+ * ya no viven aquí: eso lo lleva {@link ProductBatch}, con historial por lote.
+ */
 @Getter
 @Setter
 @Entity
@@ -15,9 +18,6 @@ public class ProductDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    private LocalDate expirationDate;
-    private Integer quantity;
 
     @Embedded
     @AttributeOverride(name = "amount", column = @Column(name = "price"))
