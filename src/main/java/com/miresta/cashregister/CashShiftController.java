@@ -43,7 +43,7 @@ public class CashShiftController {
     public ResponseEntity<CashShiftResponse> close(
             @PathVariable Long id, @RequestBody CloseShiftRequest request, Authentication authentication) {
         return ResponseEntity.ok(
-                service.close(id, request.countedCash(), request.notes(), authentication.getName()));
+                service.close(id, request.countedByMethod(), request.notes(), authentication.getName()));
     }
 
     @PostMapping("/{id}/movements")

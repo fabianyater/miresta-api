@@ -11,7 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +26,7 @@ public class CashShiftService {
 
     private final CashShiftRepository shiftRepository;
     private final CashMovementRepository movementRepository;
+    private final CashShiftMethodClosingRepository methodClosingRepository;
     private final OrderPaymentRepository orderPaymentRepository;
     private final UserRepository userRepository;
 
@@ -43,20 +47,56 @@ public class CashShiftService {
         return toResponse(shiftRepository.save(shift));
     }
 
+    /**
+     * Cierra el turno cuadrando TODOS los métodos de pago que tuvieron ventas en el
+     * turno (no solo efectivo) — efectivo se cuenta físicamente; tarjeta/transferencia
+     * se verifican contra lo que reporte el datáfono o el banco. Un método que no
+     * venga en {@code countedByMethod} se asume cuadrado (contado = esperado), para no
+     * bloquear el cierre por un método que nadie verificó a mano.
+     */
     @Transactional
-    public CashShiftResponse close(Long shiftId, long countedCash, String notes, String actingUserEmail) {
-        if (countedCash < 0) {
-            throw new IllegalStateException("El efectivo contado no puede ser negativo.");
-        }
+    public CashShiftResponse close(Long shiftId, Map<String, Long> countedByMethod, String notes, String actingUserEmail) {
         CashShift shift = requireOpenShift(shiftId);
         Instant now = Instant.now();
-        long expected = computeExpectedCash(shift, now);
+
+        Map<String, Long> expectedByMethod = expectedByMethod(shift, now);
+        Map<String, Long> counted = countedByMethod != null ? countedByMethod : Map.of();
+
+        List<CashShiftMethodClosing> closings = new ArrayList<>();
+        long totalExpected = 0L;
+        long totalCounted = 0L;
+        Long cashCounted = null;
+        Long cashExpected = null;
+        for (Map.Entry<String, Long> entry : expectedByMethod.entrySet()) {
+            String method = entry.getKey();
+            long expected = entry.getValue();
+            long countedAmount = counted.getOrDefault(method, expected);
+            if (countedAmount < 0) {
+                throw new IllegalStateException("El monto contado de " + method + " no puede ser negativo.");
+            }
+
+            CashShiftMethodClosing closing = new CashShiftMethodClosing();
+            closing.setShift(shift);
+            closing.setPaymentTypeName(method);
+            closing.setExpectedAmount(expected);
+            closing.setCountedAmount(countedAmount);
+            closing.setDifferenceAmount(countedAmount - expected);
+            closings.add(closing);
+
+            totalExpected += expected;
+            totalCounted += countedAmount;
+            if (CASH_METHOD.equals(method)) {
+                cashExpected = expected;
+                cashCounted = countedAmount;
+            }
+        }
+        methodClosingRepository.saveAll(closings);
 
         shift.setClosedAt(now);
         shift.setClosedBy(resolveName(actingUserEmail));
-        shift.setCountedCash(countedCash);
-        shift.setExpectedCash(expected);
-        shift.setDifference(countedCash - expected);
+        shift.setExpectedCash(cashExpected != null ? cashExpected : 0L);
+        shift.setCountedCash(cashCounted != null ? cashCounted : 0L);
+        shift.setDifference((cashCounted != null ? cashCounted : 0L) - (cashExpected != null ? cashExpected : 0L));
         shift.setNotes(notes != null && !notes.isBlank() ? notes.trim() : null);
 
         return toResponse(shiftRepository.save(shift));
@@ -115,19 +155,32 @@ public class CashShiftService {
         return shift;
     }
 
-    private long computeExpectedCash(CashShift shift, Instant asOf) {
+    /**
+     * Lo esperado por método de pago dentro del turno, hasta {@code asOf}. Efectivo
+     * siempre aparece (aunque no haya vendido nada en efectivo, la base y los
+     * movimientos igual cuentan); el resto de métodos solo si tuvieron ventas.
+     */
+    private Map<String, Long> expectedByMethod(CashShift shift, Instant asOf) {
         List<CashMovement> movements = movementRepository.findByShift_IdOrderByCreatedAtAsc(shift.getId());
-        long cashSales = cashSalesTotal(shift, asOf);
         long entradas = sumByType(movements, ENTRADA);
         long salidas = sumByType(movements, SALIDA);
-        return shift.getOpeningCash().amount() + cashSales + entradas - salidas;
-    }
 
-    private long cashSalesTotal(CashShift shift, Instant asOf) {
-        return orderPaymentRepository.findPaymentTotals(shift.getOpenedAt(), asOf).stream()
-                .filter(row -> CASH_METHOD.equalsIgnoreCase(row.paymentTypeName()))
-                .mapToLong(row -> row.total() != null ? row.total() : 0L)
-                .sum();
+        Map<String, Long> salesByMethod = new LinkedHashMap<>();
+        for (var row : orderPaymentRepository.findPaymentTotals(shift.getOpenedAt(), asOf)) {
+            String method = row.paymentTypeName() != null ? row.paymentTypeName() : "Sin especificar";
+            long total = row.total() != null ? row.total() : 0L;
+            salesByMethod.merge(method, total, Long::sum);
+        }
+
+        Map<String, Long> expected = new LinkedHashMap<>();
+        long cashSales = salesByMethod.getOrDefault(CASH_METHOD, 0L);
+        expected.put(CASH_METHOD, shift.getOpeningCash().amount() + cashSales + entradas - salidas);
+        salesByMethod.forEach((method, total) -> {
+            if (!CASH_METHOD.equals(method)) {
+                expected.put(method, total);
+            }
+        });
+        return expected;
     }
 
     private long sumByType(List<CashMovement> movements, String type) {
@@ -173,6 +226,33 @@ public class CashShiftService {
                         m.getId(), m.getType(), m.getAmount(), m.getReason(), m.getCreatedAt(), m.getCreatedBy()))
                 .toList();
 
+        List<MethodReconciliationResponse> methodReconciliations;
+        long totalExpected;
+        Money totalCountedMoney;
+        Money totalDifferenceMoney;
+        if (shift.getClosedAt() != null) {
+            List<CashShiftMethodClosing> closings = methodClosingRepository.findByShift_Id(shift.getId());
+            methodReconciliations = closings.stream()
+                    .map(c -> new MethodReconciliationResponse(
+                            c.getPaymentTypeName(),
+                            Money.of(c.getExpectedAmount()),
+                            Money.of(c.getCountedAmount()),
+                            Money.of(c.getDifferenceAmount())))
+                    .toList();
+            totalExpected = closings.stream().mapToLong(CashShiftMethodClosing::getExpectedAmount).sum();
+            long totalCounted = closings.stream().mapToLong(CashShiftMethodClosing::getCountedAmount).sum();
+            totalCountedMoney = Money.of(totalCounted);
+            totalDifferenceMoney = Money.of(totalCounted - totalExpected);
+        } else {
+            Map<String, Long> expected = expectedByMethod(shift, Instant.now());
+            methodReconciliations = expected.entrySet().stream()
+                    .map(e -> new MethodReconciliationResponse(e.getKey(), Money.of(e.getValue()), null, null))
+                    .toList();
+            totalExpected = expected.values().stream().mapToLong(Long::longValue).sum();
+            totalCountedMoney = null;
+            totalDifferenceMoney = null;
+        }
+
         return new CashShiftResponse(
                 shift.getId(),
                 shift.getOpenedAt(),
@@ -188,6 +268,10 @@ public class CashShiftService {
                 salesByMethod,
                 Money.of(entradas),
                 Money.of(salidas),
-                movements);
+                movements,
+                methodReconciliations,
+                Money.of(totalExpected),
+                totalCountedMoney,
+                totalDifferenceMoney);
     }
 }

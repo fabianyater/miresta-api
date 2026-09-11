@@ -26,5 +26,11 @@ public record CashShiftResponse(
         List<PaymentTotalResponse> salesByMethod,
         Money totalEntradas,
         Money totalSalidas,
-        List<CashMovementResponse> movements) {
+        List<CashMovementResponse> movements,
+        // Cuadre de TODOS los métodos de pago, no solo efectivo (que además aparece
+        // arriba porque es el único que se cuenta físicamente y tiene base/movimientos).
+        List<MethodReconciliationResponse> methodReconciliations,
+        Money totalExpectedAllMethods,
+        Money totalCountedAllMethods,
+        Money totalDifferenceAllMethods) {
 }
