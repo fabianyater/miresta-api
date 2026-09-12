@@ -19,4 +19,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("select p from Product p where p.name in ?1 and p.category.name = ?2")
     List<ProductInfo> findAllByNameIn(Collection<String> names, String categoryName);
+
+    boolean existsByNameIgnoreCaseAndCategory_Id(String name, Long categoryId);
+
+    boolean existsByNameIgnoreCaseAndCategory_IdAndIdNot(String name, Long categoryId, Long id);
 }

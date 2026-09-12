@@ -23,9 +23,15 @@ public class ProductServiceImpl implements IProductService {
     @Override
     public void createProduct(ProductRequest productRequest) {
         Category category = categoryServiceImpl.getCategoryById(productRequest.categoryId());
-        Product product = new Product();
+        String name = normalizeName(productRequest.name());
 
-        product.setName(productRequest.name());
+        if (productRepository.existsByNameIgnoreCaseAndCategory_Id(name, category.getId())) {
+            throw new IllegalStateException(
+                    "Ya existe \"" + name + "\" en " + category.getName() + ".");
+        }
+
+        Product product = new Product();
+        product.setName(name);
         product.setCategory(category);
 
         productRepository.save(product);
@@ -41,9 +47,16 @@ public class ProductServiceImpl implements IProductService {
     @Override
     public ProductDetailResponse updateProduct(Long productId, UpdateProductRequest request) {
         Product product = getProductById(productId);
+        String name = normalizeName(request.name());
+        Category category = categoryServiceImpl.getCategoryById(request.categoryId());
 
-        product.setName(request.name());
-        product.setCategory(categoryServiceImpl.getCategoryById(request.categoryId()));
+        if (productRepository.existsByNameIgnoreCaseAndCategory_IdAndIdNot(name, category.getId(), productId)) {
+            throw new IllegalStateException(
+                    "Ya existe \"" + name + "\" en " + category.getName() + ".");
+        }
+
+        product.setName(name);
+        product.setCategory(category);
         product.setActsAsCategory(request.actsAsCategory());
 
         Product saved = productRepository.save(product);
@@ -106,6 +119,14 @@ public class ProductServiceImpl implements IProductService {
     public Product getProductById(Long productId) {
         return productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado: " + productId));
+    }
+
+    private String normalizeName(String name) {
+        String trimmed = name != null ? name.trim() : "";
+        if (trimmed.isEmpty()) {
+            throw new IllegalStateException("El nombre del producto no puede estar vacío.");
+        }
+        return trimmed;
     }
 
     private ProductDetailResponse toDetailResponse(Product product) {
