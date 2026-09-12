@@ -100,7 +100,13 @@ public class TableServiceImpl implements ITableService {
 
         table.setNumber(request.number());
         if (request.salonId() != null && !request.salonId().equals(table.getSalon().getId())) {
-            table.setSalon(getSalonOrThrow(request.salonId()));
+            Salon newSalon = getSalonOrThrow(request.salonId());
+            table.setSalon(newSalon);
+            // Nueva sección, nueva casilla — la posición vieja era relativa al plano del
+            // salón anterior y podría chocar con una mesa que ya esté ahí.
+            float[] position = nextGridPosition(newSalon.getId());
+            table.setPositionX(position[0]);
+            table.setPositionY(position[1]);
         }
         DiningTable saved = diningTableRepository.save(table);
 
