@@ -14,11 +14,11 @@ import java.util.List;
 @Service
 public class TableServiceImpl implements ITableService {
 
-    // Ubicación por defecto de una mesa nueva — una cuadrícula simple de 4 columnas
-    // para que no quede apilada sobre otra; el admin la reacomoda en Admin -> Salones.
-    private static final int GRID_COLUMNS = 4;
-    private static final float GRID_SPACING = 20f;
-    private static final float GRID_OFFSET = 10f;
+    // Cuadrícula del plano de un salón — 8x5 casillas (calzan con el lienzo 16:10 del
+    // frontend en casillas cuadradas). Toda mesa vive en el centro de una casilla; el
+    // frontend es quien impide soltarla fuera de la cuadrícula o encima de otra mesa.
+    private static final int GRID_COLUMNS = 8;
+    private static final int GRID_ROWS = 5;
 
     private final DiningTableRepository diningTableRepository;
     private final DiningTableStatusRepository diningTableStatusRepository;
@@ -144,8 +144,10 @@ public class TableServiceImpl implements ITableService {
 
     private float[] nextGridPosition(Long salonId) {
         int index = (int) diningTableRepository.countBySalon_Id(salonId);
-        float x = GRID_OFFSET + GRID_SPACING * (index % GRID_COLUMNS);
-        float y = GRID_OFFSET + GRID_SPACING * (index / GRID_COLUMNS);
+        int col = index % GRID_COLUMNS;
+        int row = (index / GRID_COLUMNS) % GRID_ROWS;
+        float x = (col + 0.5f) / GRID_COLUMNS * 100f;
+        float y = (row + 0.5f) / GRID_ROWS * 100f;
         return new float[]{x, y};
     }
 
