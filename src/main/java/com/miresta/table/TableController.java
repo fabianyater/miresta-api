@@ -30,6 +30,13 @@ class TableController {
         return ResponseEntity.ok(tableServiceImpl.renameTable(id, request));
     }
 
+    @PatchMapping("/{id}/position")
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    public ResponseEntity<TableEntityDto> updatePosition(
+            @PathVariable Long id, @RequestBody TablePositionRequest request) {
+        return ResponseEntity.ok(tableServiceImpl.updateTablePosition(id, request));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
     public ResponseEntity<Void> deleteTable(@PathVariable Long id) {

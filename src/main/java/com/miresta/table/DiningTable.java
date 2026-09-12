@@ -25,6 +25,17 @@ public class DiningTable {
     @JoinColumn(name = "status_id", nullable = false)
     private DiningTableStatus status;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "salon_id", nullable = false)
+    private Salon salon;
+
+    /** Posición en el plano del salón, 0-100 (porcentaje del lienzo). */
+    @Column(name = "position_x", nullable = false)
+    private float positionX;
+
+    @Column(name = "position_y", nullable = false)
+    private float positionY;
+
     @OneToMany(mappedBy = "diningTable")
     private Set<Order> orders = new LinkedHashSet<>();
 }

@@ -9,5 +9,7 @@ public interface ITableService {
 
     TableEntityDto renameTable(Long id, TableRequest request);
 
+    TableEntityDto updateTablePosition(Long id, TablePositionRequest request);
+
     void deleteTable(Long id);
 }

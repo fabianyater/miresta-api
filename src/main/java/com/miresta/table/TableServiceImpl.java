@@ -13,8 +13,16 @@ import java.util.List;
 @RequiredArgsConstructor
 @Service
 public class TableServiceImpl implements ITableService {
+
+    // Ubicación por defecto de una mesa nueva — una cuadrícula simple de 4 columnas
+    // para que no quede apilada sobre otra; el admin la reacomoda en Admin -> Salones.
+    private static final int GRID_COLUMNS = 4;
+    private static final float GRID_SPACING = 20f;
+    private static final float GRID_OFFSET = 10f;
+
     private final DiningTableRepository diningTableRepository;
     private final DiningTableStatusRepository diningTableStatusRepository;
+    private final SalonRepository salonRepository;
 
     @Override
     public TableSummaryResponse getTablesInfo() {
@@ -53,16 +61,25 @@ public class TableServiceImpl implements ITableService {
         if (diningTableRepository.existsByNumber(request.number())) {
             throw new EntityExistsException("Ya existe una mesa con el número " + request.number());
         }
+        if (request.salonId() == null) {
+            throw new IllegalArgumentException("Indica a qué salón pertenece la mesa.");
+        }
+        Salon salon = getSalonOrThrow(request.salonId());
 
         DiningTableStatus open = diningTableStatusRepository.findByName("OPEN");
 
         DiningTable table = new DiningTable();
         table.setNumber(request.number());
         table.setStatus(open);
+        table.setSalon(salon);
+
+        float[] position = nextGridPosition(salon.getId());
+        table.setPositionX(position[0]);
+        table.setPositionY(position[1]);
 
         DiningTable saved = diningTableRepository.save(table);
 
-        return new TableEntityDto(saved.getId(), saved.getNumber(), saved.getStatus().getName());
+        return toDto(saved);
     }
 
     @Transactional
@@ -82,9 +99,24 @@ public class TableServiceImpl implements ITableService {
                 });
 
         table.setNumber(request.number());
+        if (request.salonId() != null && !request.salonId().equals(table.getSalon().getId())) {
+            table.setSalon(getSalonOrThrow(request.salonId()));
+        }
         DiningTable saved = diningTableRepository.save(table);
 
-        return new TableEntityDto(saved.getId(), saved.getNumber(), saved.getStatus().getName());
+        return toDto(saved);
+    }
+
+    @Transactional
+    @Override
+    public TableEntityDto updateTablePosition(Long id, TablePositionRequest request) {
+        DiningTable table = diningTableRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Mesa no encontrada: " + id));
+
+        table.setPositionX(clamp(request.positionX()));
+        table.setPositionY(clamp(request.positionY()));
+
+        return toDto(diningTableRepository.save(table));
     }
 
     @Transactional
@@ -103,5 +135,32 @@ public class TableServiceImpl implements ITableService {
         } catch (DataIntegrityViolationException e) {
             throw new IllegalStateException("No se puede eliminar la mesa: tiene pedidos asociados");
         }
+    }
+
+    private Salon getSalonOrThrow(Long salonId) {
+        return salonRepository.findById(salonId)
+                .orElseThrow(() -> new EntityNotFoundException("Salón no encontrado: " + salonId));
+    }
+
+    private float[] nextGridPosition(Long salonId) {
+        int index = (int) diningTableRepository.countBySalon_Id(salonId);
+        float x = GRID_OFFSET + GRID_SPACING * (index % GRID_COLUMNS);
+        float y = GRID_OFFSET + GRID_SPACING * (index / GRID_COLUMNS);
+        return new float[]{x, y};
+    }
+
+    private float clamp(float value) {
+        return Math.max(0f, Math.min(100f, value));
+    }
+
+    private TableEntityDto toDto(DiningTable table) {
+        return new TableEntityDto(
+                table.getId(),
+                table.getNumber(),
+                table.getStatus().getName(),
+                table.getSalon().getId(),
+                table.getSalon().getName(),
+                table.getPositionX(),
+                table.getPositionY());
     }
 }

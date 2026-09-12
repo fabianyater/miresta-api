@@ -16,11 +16,15 @@ import java.util.Optional;
 public interface DiningTableRepository extends JpaRepository<DiningTable, Long> {
 
     @Query("""
-        select new com.miresta.table.TableEntityDto(t.id, t.number, s.name)
+        select new com.miresta.table.TableEntityDto(
+            t.id, t.number, s.name, sal.id, sal.name, t.positionX, t.positionY)
         from DiningTable t
         join t.status s
+        join t.salon sal
     """)
     List<TableEntityDto> findAllAsDto();
+
+    long countBySalon_Id(Long salonId);
 
     @Query("""
         select\s
