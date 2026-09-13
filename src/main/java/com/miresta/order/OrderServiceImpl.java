@@ -689,13 +689,41 @@ public class OrderServiceImpl implements IOrderService {
         for (OrderItemSelection selection : AccompanimentDisplay.doubled(accompanimentSelections)) {
             accompanimentDeviations.add(toProductResponse(selection, mealType, comboFormed));
         }
-        for (Product missing : AccompanimentDisplay.missingProducts(orderItem, accompanimentSelections)) {
+        for (Product missing : AccompanimentDisplay.missingProducts(orderItem, ComboCategory.ACOMPANANTE)) {
             accompanimentDeviations.add(new OrderItemProductResponse(
                     missing.getId(), "Sin " + missing.getName(), 0L, Money.ZERO, Money.ZERO, null, null));
         }
         if (!accompanimentDeviations.isEmpty()) {
             itemsByCategory.add(new GroupedOrderItemResponse(
                     COMBO_CATEGORY_LABELS.get(ComboCategory.ACOMPANANTE), accompanimentDeviations));
+        }
+
+        // El principio sigue siendo de elegir (no arranca puesto como el acompañante),
+        // pero si no se eligió ninguno igual se avisa — deja claro que fue a propósito
+        // y no que se olvidó marcarlo. Se suma al grupo "Principios" si ya existe (por
+        // haber elegido otro principio distinto) o crea uno nuevo si no.
+        List<Product> missingPrincipios = AccompanimentDisplay.missingProducts(orderItem, ComboCategory.PRINCIPIO);
+        if (!missingPrincipios.isEmpty()) {
+            String principioLabel = COMBO_CATEGORY_LABELS.get(ComboCategory.PRINCIPIO);
+            List<OrderItemProductResponse> missingEntries = missingPrincipios.stream()
+                    .map(p -> new OrderItemProductResponse(
+                            p.getId(), "Sin " + p.getName(), 0L, Money.ZERO, Money.ZERO, null, null))
+                    .toList();
+            int existingIndex = -1;
+            for (int i = 0; i < itemsByCategory.size(); i++) {
+                if (itemsByCategory.get(i).category().equals(principioLabel)) {
+                    existingIndex = i;
+                    break;
+                }
+            }
+            if (existingIndex >= 0) {
+                GroupedOrderItemResponse existing = itemsByCategory.get(existingIndex);
+                List<OrderItemProductResponse> merged = new ArrayList<>(existing.products());
+                merged.addAll(missingEntries);
+                itemsByCategory.set(existingIndex, new GroupedOrderItemResponse(principioLabel, merged));
+            } else {
+                itemsByCategory.add(new GroupedOrderItemResponse(principioLabel, missingEntries));
+            }
         }
 
         return new OrderItemResponse(

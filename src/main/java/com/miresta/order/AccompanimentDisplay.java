@@ -15,7 +15,12 @@ import java.util.stream.Collectors;
  * de siempre a quien lee el pedido (mesero, cocina, cliente). Solo importa lo que se
  * salió de lo normal: los que se quitaron y los que se doblaron. Usado tanto por la
  * respuesta de la API (OrderServiceImpl) como por la comanda de cocina (TicketService)
- * — deben mostrar exactamente lo mismo. */
+ * — deben mostrar exactamente lo mismo.
+ *
+ * El principio no arranca preseleccionado (a diferencia del acompañante, sigue siendo
+ * de elegir), pero si el mesero no elige ninguno igual vale la pena avisar "Sin X" en
+ * vez de dejarlo ambiguo (¿se le olvidó marcarlo, o el cliente no quiso principio?) —
+ * ver {@link #missingProducts}, reutilizado también para esa categoría. */
 public final class AccompanimentDisplay {
     private AccompanimentDisplay() {
     }
@@ -38,10 +43,11 @@ public final class AccompanimentDisplay {
                 .toList();
     }
 
-    /** Acompañantes del menú de hoy (sin duplicar) que no quedaron seleccionados en
-     * este plato — el resto del menú no importa aquí. */
-    public static List<Product> missingProducts(OrderItem item, List<OrderItemSelection> accompanimentSelections) {
-        Set<Long> selectedIds = accompanimentSelections.stream()
+    /** Productos del menú de hoy en `category` (sin duplicar) que no quedaron
+     * seleccionados en este plato — el resto del menú no importa aquí. */
+    public static List<Product> missingProducts(OrderItem item, ComboCategory category) {
+        Set<Long> selectedIds = item.getOrderItemSelections().stream()
+                .filter(s -> s.getProduct().getCategory().getCode() == category)
                 .map(s -> s.getProduct().getId())
                 .collect(Collectors.toSet());
 
@@ -49,7 +55,7 @@ public final class AccompanimentDisplay {
         Set<Long> added = new HashSet<>();
         for (MenuItem menuItem : item.getMenuOffering().getMenuItems()) {
             Product product = menuItem.getProduct();
-            if (product.getCategory().getCode() == ComboCategory.ACOMPANANTE
+            if (product.getCategory().getCode() == category
                     && !selectedIds.contains(product.getId())
                     && added.add(product.getId())) {
                 missing.add(product);

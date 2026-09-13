@@ -96,8 +96,8 @@ public class TicketService {
             for (OrderItemSelection selection : sortedByPrintOrder(item)) {
                 doc.line("  " + selection.getQuantity() + "x " + selection.getProduct().getName());
             }
-            for (String missingAccompaniment : missingAccompanimentNames(item)) {
-                doc.line("  Sin " + missingAccompaniment);
+            for (String missing : missingNames(item)) {
+                doc.line("  Sin " + missing);
             }
 
             if (item.getComments() != null && !item.getComments().isBlank()) {
@@ -138,8 +138,8 @@ public class TicketService {
             for (OrderItemSelection selection : sortedByPrintOrder(item)) {
                 doc.line("  " + selection.getQuantity() + "x " + selection.getProduct().getName());
             }
-            for (String missingAccompaniment : missingAccompanimentNames(item)) {
-                doc.line("  Sin " + missingAccompaniment);
+            for (String missing : missingNames(item)) {
+                doc.line("  Sin " + missing);
             }
         }
 
@@ -215,8 +215,8 @@ public class TicketService {
      * los principios, no donde caería su categoría cruda de catálogo). Los
      * acompañantes en su cantidad de siempre no se listan aquí — ya vienen puestos
      * por defecto, así que no aportan nada; solo los que se doblaron ("2x Arroz")
-     * salen impresos (ver AccompanimentDisplay). Los que se quitaron se imprimen
-     * aparte como "Sin X" (ver {@link #missingAccompanimentNames}).
+     * salen impresos (ver AccompanimentDisplay). Los que se quitaron (o, para
+     * principio, no elegidos) se imprimen aparte como "Sin X" (ver {@link #missingNames}).
      */
     private List<OrderItemSelection> sortedByPrintOrder(OrderItem item) {
         List<OrderItemSelection> toPrint = new ArrayList<>(AccompanimentDisplay.nonAccompanimentSelections(item));
@@ -227,10 +227,17 @@ public class TicketService {
                 .toList();
     }
 
-    private List<String> missingAccompanimentNames(OrderItem item) {
-        return AccompanimentDisplay.missingProducts(item, AccompanimentDisplay.accompanimentSelections(item)).stream()
-                .map(Product::getName)
-                .toList();
+    /** "Sin X" para acompañantes que se quitaron y para principios que no se eligieron
+     * ninguno — ver AccompanimentDisplay. */
+    private List<String> missingNames(OrderItem item) {
+        List<String> names = new ArrayList<>();
+        for (Product p : AccompanimentDisplay.missingProducts(item, ComboCategory.ACOMPANANTE)) {
+            names.add(p.getName());
+        }
+        for (Product p : AccompanimentDisplay.missingProducts(item, ComboCategory.PRINCIPIO)) {
+            names.add(p.getName());
+        }
+        return names;
     }
 
     private String itemLabel(OrderItem item) {
