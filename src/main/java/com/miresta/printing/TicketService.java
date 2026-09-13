@@ -99,6 +99,9 @@ public class TicketService {
             for (String missing : missingNames(item)) {
                 doc.line("  Sin " + missing);
             }
+            if (hasMissingPrincipio(item)) {
+                doc.line("  Sin principio");
+            }
 
             if (item.getComments() != null && !item.getComments().isBlank()) {
                 doc.line("  Nota: " + item.getComments());
@@ -140,6 +143,9 @@ public class TicketService {
             }
             for (String missing : missingNames(item)) {
                 doc.line("  Sin " + missing);
+            }
+            if (hasMissingPrincipio(item)) {
+                doc.line("  Sin principio");
             }
         }
 
@@ -227,17 +233,22 @@ public class TicketService {
                 .toList();
     }
 
-    /** "Sin X" para acompañantes que se quitaron y para principios que no se eligieron
-     * ninguno — ver AccompanimentDisplay. */
+    /** "Sin X" para cada acompañante que se quitó — el principio, si no se eligió
+     * ninguno, se avisa aparte y genérico (ver {@link #hasMissingPrincipio}), ya que
+     * normalmente solo se escoge uno del menú y nombrar cada opción no tomada no
+     * aporta nada. */
     private List<String> missingNames(OrderItem item) {
-        List<String> names = new ArrayList<>();
-        for (Product p : AccompanimentDisplay.missingProducts(item, ComboCategory.ACOMPANANTE)) {
-            names.add(p.getName());
-        }
-        for (Product p : AccompanimentDisplay.missingProducts(item, ComboCategory.PRINCIPIO)) {
-            names.add(p.getName());
-        }
-        return names;
+        return AccompanimentDisplay.missingProducts(item, ComboCategory.ACOMPANANTE).stream()
+                .map(Product::getName)
+                .toList();
+    }
+
+    private boolean hasMissingPrincipio(OrderItem item) {
+        boolean menuHasPrincipio = item.getMenuOffering().getMenuItems().stream()
+                .anyMatch(mi -> mi.getProduct().getCategory().getCode() == ComboCategory.PRINCIPIO);
+        boolean selectedAny = item.getOrderItemSelections().stream()
+                .anyMatch(s -> s.getProduct().getCategory().getCode() == ComboCategory.PRINCIPIO);
+        return menuHasPrincipio && !selectedAny;
     }
 
     private String itemLabel(OrderItem item) {

@@ -698,32 +698,19 @@ public class OrderServiceImpl implements IOrderService {
                     COMBO_CATEGORY_LABELS.get(ComboCategory.ACOMPANANTE), accompanimentDeviations));
         }
 
-        // El principio sigue siendo de elegir (no arranca puesto como el acompañante),
-        // pero si no se eligió ninguno igual se avisa — deja claro que fue a propósito
-        // y no que se olvidó marcarlo. Se suma al grupo "Principios" si ya existe (por
-        // haber elegido otro principio distinto) o crea uno nuevo si no.
-        List<Product> missingPrincipios = AccompanimentDisplay.missingProducts(orderItem, ComboCategory.PRINCIPIO);
-        if (!missingPrincipios.isEmpty()) {
-            String principioLabel = COMBO_CATEGORY_LABELS.get(ComboCategory.PRINCIPIO);
-            List<OrderItemProductResponse> missingEntries = missingPrincipios.stream()
-                    .map(p -> new OrderItemProductResponse(
-                            p.getId(), "Sin " + p.getName(), 0L, Money.ZERO, Money.ZERO, null, null))
-                    .toList();
-            int existingIndex = -1;
-            for (int i = 0; i < itemsByCategory.size(); i++) {
-                if (itemsByCategory.get(i).category().equals(principioLabel)) {
-                    existingIndex = i;
-                    break;
-                }
-            }
-            if (existingIndex >= 0) {
-                GroupedOrderItemResponse existing = itemsByCategory.get(existingIndex);
-                List<OrderItemProductResponse> merged = new ArrayList<>(existing.products());
-                merged.addAll(missingEntries);
-                itemsByCategory.set(existingIndex, new GroupedOrderItemResponse(principioLabel, merged));
-            } else {
-                itemsByCategory.add(new GroupedOrderItemResponse(principioLabel, missingEntries));
-            }
+        // El principio sigue siendo de elegir (no arranca puesto como el acompañante) —
+        // normalmente se escoge uno solo del menú, así que no tiene sentido nombrar cada
+        // opción no tomada (eso sí aplicaría para "ninguno de los dos" en un menú con
+        // dos principios). Si de plano no se eligió ninguno, un solo aviso genérico
+        // basta para dejar claro que fue así a propósito.
+        boolean menuHasPrincipio = orderItem.getMenuOffering().getMenuItems().stream()
+                .anyMatch(mi -> mi.getProduct().getCategory().getCode() == ComboCategory.PRINCIPIO);
+        boolean selectedAnyPrincipio = orderItem.getOrderItemSelections().stream()
+                .anyMatch(s -> s.getProduct().getCategory().getCode() == ComboCategory.PRINCIPIO);
+        if (menuHasPrincipio && !selectedAnyPrincipio) {
+            itemsByCategory.add(new GroupedOrderItemResponse(
+                    COMBO_CATEGORY_LABELS.get(ComboCategory.PRINCIPIO),
+                    List.of(new OrderItemProductResponse(null, "Sin principio", 0L, Money.ZERO, Money.ZERO, null, null))));
         }
 
         return new OrderItemResponse(
