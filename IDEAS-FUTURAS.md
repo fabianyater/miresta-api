@@ -1,7 +1,11 @@
 # Ideas para más adelante (sin fecha, sin comprometerse a nada todavía)
 
 Lluvia de ideas del 30/08/2026 — quedan aquí anotadas para retomar cuando se decida
-cuál atacar primero. Ninguna se ha diseñado en detalle todavía.
+cuál atacar primero.
+
+**Estado (13/09/2026):** #2, #5 y #6 ya están implementadas (menú por WhatsApp vía
+wa.me en `ClientesPage`, mensajes a cocina, apertura/cierre de caja). Quedan #1, #3
+y #4 — empezando ahora por #1.
 
 ---
 
@@ -17,11 +21,13 @@ Esto probablemente necesita algo tipo WebSocket/Server-Sent Events en vez de sol
 polling — es la base técnica de la que dependen las ideas 3 y 4 de abajo (avisos en
 tiempo real).
 
-## 2. Enviar el menú del día a los clientes por WhatsApp
+## 2. Enviar el menú del día a los clientes por WhatsApp — ✅ Hecho
 
-Mandar el menú de hoy (probablemente el de Almuerzo) a una lista de clientes por
-WhatsApp — para que decidan qué pedir antes de llamar/llegar. Necesita integrarse
-con la API de WhatsApp Business (Meta) o un proveedor tipo Twilio/similar.
+Implementado como link "click to chat" (`wa.me`) en vez de la API oficial de Meta
+Business: en Clientes se seleccionan destinatarios y se abre WhatsApp con el menú
+de almuerzo de hoy ya redactado (`lib/whatsapp.ts` + `ClientesPage.tsx`). No manda
+el mensaje automáticamente (eso sigue requiriendo la API de Meta) — el mesero/admin
+igual tiene que darle enviar en WhatsApp.
 
 ## 3. Que un cliente pida por WhatsApp y el pedido entre solo al sistema
 
@@ -48,14 +54,14 @@ Relacionado con la idea 1: alguna notificación (dentro de la app, o incluso pus
 avise cuando un producto del menú de hoy está por agotarse o ya se agotó, para que
 cocina/meseros reaccionen a tiempo.
 
-## 5. Mensajes rápidos de sala a cocina
+## 5. Mensajes rápidos de sala a cocina — ✅ Hecho
 
 Un canal simple de mensajitos cortos desde la app hacia cocina — ej. "necesito un
 huevo frito", sin tener que ir caminando o gritar. Podría ser tan simple como una
 lista de mensajes predefinidos + uno libre, mostrados en una pantalla/tablet en
 cocina, o notificaciones push si cocina también tiene un dispositivo.
 
-## 6. Apertura y cierre de caja (turno)
+## 6. Apertura y cierre de caja (turno) — ✅ Hecho
 
 Manejar el turno de caja como en un POS de verdad:
 - **Apertura:** al empezar el día, registrar el fondo/base de caja con el que se
