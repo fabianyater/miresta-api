@@ -149,19 +149,17 @@ public class SalonServiceImpl implements ISalonService {
         salonLayoutRepository.delete(layout);
     }
 
-    /** Copia las posiciones guardadas a las mesas reales — una mesa que ya no esté en
-     * este salón (se movió a otro después de guardar) se deja como está. */
+    /** Copia las posiciones guardadas a las mesas reales — si alguna mesa se había
+     * movido a otro salón desde que se guardó el plano, la trae de vuelta a este. */
     @Transactional
     @Override
     public void applyLayout(Long salonId, Long layoutId) {
-        getSalonOrThrow(salonId);
+        Salon salon = getSalonOrThrow(salonId);
         SalonLayout layout = getLayoutOrThrow(salonId, layoutId);
 
         for (SalonLayoutPosition position : layout.getPositions()) {
             DiningTable table = position.getTable();
-            if (!table.getSalon().getId().equals(salonId)) {
-                continue;
-            }
+            table.setSalon(salon);
             table.setPositionX(position.getPositionX());
             table.setPositionY(position.getPositionY());
             diningTableRepository.save(table);
