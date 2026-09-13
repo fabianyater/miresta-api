@@ -2,6 +2,7 @@ package com.miresta.order;
 
 import com.miresta.auth.User;
 import com.miresta.auth.UserRepository;
+import com.miresta.catalog.Product;
 import com.miresta.catalog.ProductBatchServiceImpl;
 import com.miresta.customer.Customer;
 import com.miresta.customer.CustomerResponse;
@@ -601,6 +602,22 @@ public class OrderServiceImpl implements IOrderService {
         );
     }
 
+    private OrderItemProductResponse toProductResponse(OrderItemSelection selection, String mealType, boolean comboFormed) {
+        return new OrderItemProductResponse(
+                selection.getProduct().getId(),
+                selection.getProduct().getName(),
+                selection.getQuantity(),
+                selection.getUnitExtraPrice(),
+                Money.of(Optional.ofNullable(selection.getProduct().getProductDetails())
+                        .map(details -> details.stream()
+                                .map(d -> d.getPrice() != null ? d.getPrice().amount() : 0L)
+                                .reduce(0L, Long::sum))
+                        .orElse(0L)),
+                selection.getReplacementCategory(),
+                pricingCalculator.lineTotalFor(selection, mealType, comboFormed)
+        );
+    }
+
     private CustomerResponse mapCustomer(Customer customer) {
         if (customer == null) {
             return null;
@@ -654,29 +671,32 @@ public class OrderServiceImpl implements IOrderService {
                 ? orderItem.getCustomer()
                 : orderItem.getOrder().getCustomer();
 
-        var groupedSelections = orderItem.getOrderItemSelections().stream()
+        List<OrderItemSelection> accompanimentSelections = AccompanimentDisplay.accompanimentSelections(orderItem);
+        var groupedSelections = AccompanimentDisplay.nonAccompanimentSelections(orderItem).stream()
                 .collect(java.util.stream.Collectors.groupingBy(this::displayCategoryFor));
 
-        List<GroupedOrderItemResponse> itemsByCategory = groupedSelections.entrySet().stream()
+        List<GroupedOrderItemResponse> itemsByCategory = new ArrayList<>(groupedSelections.entrySet().stream()
                 .map(entry -> new GroupedOrderItemResponse(
                         entry.getKey(),
                         entry.getValue().stream()
-                                .map(selection -> new OrderItemProductResponse(
-                                        selection.getProduct().getId(),
-                                        selection.getProduct().getName(),
-                                        selection.getQuantity(),
-                                        selection.getUnitExtraPrice(),
-                                        Money.of(Optional.ofNullable(selection.getProduct().getProductDetails())
-                                                .map(details -> details.stream()
-                                                        .map(d -> d.getPrice() != null ? d.getPrice().amount() : 0L)
-                                                        .reduce(0L, Long::sum))
-                                                .orElse(0L)),
-                                        selection.getReplacementCategory(),
-                                        pricingCalculator.lineTotalFor(selection, mealType, comboFormed)
-                                ))
+                                .map(selection -> toProductResponse(selection, mealType, comboFormed))
                                 .toList()
                 ))
-                .toList();
+                .toList());
+
+        // Solo lo que se salió de lo normal — ver AccompanimentDisplay.
+        List<OrderItemProductResponse> accompanimentDeviations = new ArrayList<>();
+        for (OrderItemSelection selection : AccompanimentDisplay.doubled(accompanimentSelections)) {
+            accompanimentDeviations.add(toProductResponse(selection, mealType, comboFormed));
+        }
+        for (Product missing : AccompanimentDisplay.missingProducts(orderItem, accompanimentSelections)) {
+            accompanimentDeviations.add(new OrderItemProductResponse(
+                    missing.getId(), "Sin " + missing.getName(), 0L, Money.ZERO, Money.ZERO, null, null));
+        }
+        if (!accompanimentDeviations.isEmpty()) {
+            itemsByCategory.add(new GroupedOrderItemResponse(
+                    COMBO_CATEGORY_LABELS.get(ComboCategory.ACOMPANANTE), accompanimentDeviations));
+        }
 
         return new OrderItemResponse(
                 orderItem.getId(),

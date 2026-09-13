@@ -1,5 +1,7 @@
 package com.miresta.printing;
 
+import com.miresta.catalog.Product;
+import com.miresta.order.AccompanimentDisplay;
 import com.miresta.order.IOrderService;
 import com.miresta.order.Order;
 import com.miresta.order.OrderItem;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
@@ -93,6 +96,9 @@ public class TicketService {
             for (OrderItemSelection selection : sortedByPrintOrder(item)) {
                 doc.line("  " + selection.getQuantity() + "x " + selection.getProduct().getName());
             }
+            for (String missingAccompaniment : missingAccompanimentNames(item)) {
+                doc.line("  Sin " + missingAccompaniment);
+            }
 
             if (item.getComments() != null && !item.getComments().isBlank()) {
                 doc.line("  Nota: " + item.getComments());
@@ -131,6 +137,9 @@ public class TicketService {
             doc.row(itemLabel(item), money(item.getTotal()));
             for (OrderItemSelection selection : sortedByPrintOrder(item)) {
                 doc.line("  " + selection.getQuantity() + "x " + selection.getProduct().getName());
+            }
+            for (String missingAccompaniment : missingAccompanimentNames(item)) {
+                doc.line("  Sin " + missingAccompaniment);
             }
         }
 
@@ -203,12 +212,24 @@ public class TicketService {
     /**
      * Sopas, luego principios, proteínas y acompañantes, el resto al final — por el
      * rol que la selección realmente cumple (un huevo "por principio" imprime junto a
-     * los principios, no donde caería su categoría cruda de catálogo).
+     * los principios, no donde caería su categoría cruda de catálogo). Los
+     * acompañantes en su cantidad de siempre no se listan aquí — ya vienen puestos
+     * por defecto, así que no aportan nada; solo los que se doblaron ("2x Arroz")
+     * salen impresos (ver AccompanimentDisplay). Los que se quitaron se imprimen
+     * aparte como "Sin X" (ver {@link #missingAccompanimentNames}).
      */
     private List<OrderItemSelection> sortedByPrintOrder(OrderItem item) {
-        return item.getOrderItemSelections().stream()
+        List<OrderItemSelection> toPrint = new ArrayList<>(AccompanimentDisplay.nonAccompanimentSelections(item));
+        toPrint.addAll(AccompanimentDisplay.doubled(AccompanimentDisplay.accompanimentSelections(item)));
+        return toPrint.stream()
                 .sorted(Comparator.comparingInt(
                         s -> PRINT_ORDER.getOrDefault(pricingCalculator.effectiveCategoryFor(s), 99)))
+                .toList();
+    }
+
+    private List<String> missingAccompanimentNames(OrderItem item) {
+        return AccompanimentDisplay.missingProducts(item, AccompanimentDisplay.accompanimentSelections(item)).stream()
+                .map(Product::getName)
                 .toList();
     }
 
