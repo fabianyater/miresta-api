@@ -93,26 +93,29 @@ public class SalonServiceImpl implements ISalonService {
 
     @Transactional(readOnly = true)
     @Override
-    public SalonLayoutResponse getLayout(Long salonId) {
+    public List<SalonLayoutResponse> getLayouts(Long salonId) {
         getSalonOrThrow(salonId);
-        return salonLayoutRepository.findBySalon_Id(salonId).map(this::toLayoutResponse).orElse(null);
+        return salonLayoutRepository.findBySalon_IdOrderBySavedAtDesc(salonId).stream()
+                .map(this::toLayoutResponse)
+                .toList();
     }
 
-    /** Guarda (o sobreescribe) la foto de dónde está cada mesa de este salón ahora mismo. */
+    /** Guarda la foto de dónde está cada mesa de este salón ahora mismo, bajo un nombre propio. */
     @Transactional
     @Override
-    public SalonLayoutResponse saveLayout(Long salonId, String actingUserEmail) {
+    public SalonLayoutResponse saveLayout(Long salonId, SalonLayoutRequest request, String actingUserEmail) {
         Salon salon = getSalonOrThrow(salonId);
+        String name = normalizeLayoutName(request.name());
+        if (salonLayoutRepository.existsBySalon_IdAndNameIgnoreCase(salonId, name)) {
+            throw new EntityExistsException("Ya existe un plano llamado \"" + name + "\" en este salón.");
+        }
         List<DiningTable> tables = diningTableRepository.findBySalon_Id(salonId);
 
-        SalonLayout layout = salonLayoutRepository.findBySalon_Id(salonId).orElseGet(() -> {
-            SalonLayout created = new SalonLayout();
-            created.setSalon(salon);
-            return created;
-        });
+        SalonLayout layout = new SalonLayout();
+        layout.setSalon(salon);
+        layout.setName(name);
         layout.setSavedAt(Instant.now());
         layout.setSavedBy(resolveName(actingUserEmail));
-        layout.getPositions().clear();
         for (DiningTable table : tables) {
             SalonLayoutPosition position = new SalonLayoutPosition();
             position.setLayout(layout);
@@ -125,14 +128,34 @@ public class SalonServiceImpl implements ISalonService {
         return toLayoutResponse(salonLayoutRepository.save(layout));
     }
 
+    @Transactional
+    @Override
+    public SalonLayoutResponse renameLayout(Long salonId, Long layoutId, SalonLayoutRequest request) {
+        getSalonOrThrow(salonId);
+        SalonLayout layout = getLayoutOrThrow(salonId, layoutId);
+        String name = normalizeLayoutName(request.name());
+        if (salonLayoutRepository.existsBySalon_IdAndNameIgnoreCaseAndIdNot(salonId, name, layoutId)) {
+            throw new EntityExistsException("Ya existe un plano llamado \"" + name + "\" en este salón.");
+        }
+        layout.setName(name);
+        return toLayoutResponse(salonLayoutRepository.save(layout));
+    }
+
+    @Transactional
+    @Override
+    public void deleteLayout(Long salonId, Long layoutId) {
+        getSalonOrThrow(salonId);
+        SalonLayout layout = getLayoutOrThrow(salonId, layoutId);
+        salonLayoutRepository.delete(layout);
+    }
+
     /** Copia las posiciones guardadas a las mesas reales — una mesa que ya no esté en
      * este salón (se movió a otro después de guardar) se deja como está. */
     @Transactional
     @Override
-    public void applyLayout(Long salonId) {
+    public void applyLayout(Long salonId, Long layoutId) {
         getSalonOrThrow(salonId);
-        SalonLayout layout = salonLayoutRepository.findBySalon_Id(salonId)
-                .orElseThrow(() -> new IllegalStateException("Este salón no tiene un plano guardado todavía."));
+        SalonLayout layout = getLayoutOrThrow(salonId, layoutId);
 
         for (SalonLayoutPosition position : layout.getPositions()) {
             DiningTable table = position.getTable();
@@ -145,6 +168,23 @@ public class SalonServiceImpl implements ISalonService {
         }
     }
 
+    private SalonLayout getLayoutOrThrow(Long salonId, Long layoutId) {
+        SalonLayout layout = salonLayoutRepository.findById(layoutId)
+                .orElseThrow(() -> new EntityNotFoundException("Plano no encontrado: " + layoutId));
+        if (!layout.getSalon().getId().equals(salonId)) {
+            throw new EntityNotFoundException("Plano no encontrado: " + layoutId);
+        }
+        return layout;
+    }
+
+    private String normalizeLayoutName(String name) {
+        String trimmed = name != null ? name.trim() : "";
+        if (trimmed.isEmpty()) {
+            throw new IllegalStateException("El nombre del plano no puede estar vacío.");
+        }
+        return trimmed;
+    }
+
     private String resolveName(String email) {
         return userRepository.findByEmail(email)
                 .map(User::getDisplayName)
@@ -154,7 +194,8 @@ public class SalonServiceImpl implements ISalonService {
 
     private SalonLayoutResponse toLayoutResponse(SalonLayout layout) {
         return new SalonLayoutResponse(
-                layout.getSalon().getId(), layout.getSavedAt(), layout.getSavedBy(), layout.getPositions().size());
+                layout.getId(), layout.getSalon().getId(), layout.getName(), layout.getSavedAt(),
+                layout.getSavedBy(), layout.getPositions().size());
     }
 
     private Salon getSalonOrThrow(Long id) {

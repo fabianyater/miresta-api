@@ -8,8 +8,8 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-/** El plano guardado de un salón — uno solo por salón, se sobreescribe cada vez que
- * se guarda de nuevo. "Aplicar" copia estas posiciones a las mesas reales. */
+/** Un plano guardado de un salón — puede haber varios por salón, cada uno con su
+ * propio nombre. "Aplicar" copia las posiciones de uno de ellos a las mesas reales. */
 @Getter
 @Setter
 @Entity
@@ -20,9 +20,12 @@ public class SalonLayout {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "salon_id", nullable = false, unique = true)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "salon_id", nullable = false)
     private Salon salon;
+
+    @Column(name = "name", nullable = false)
+    private String name;
 
     @Column(name = "saved_at", nullable = false)
     private Instant savedAt;

@@ -46,22 +46,38 @@ class SalonController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{id}/layout")
+    @GetMapping("/{id}/layouts")
     @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
-    public ResponseEntity<SalonLayoutResponse> getLayout(@PathVariable Long id) {
-        return ResponseEntity.ok(salonService.getLayout(id));
+    public ResponseEntity<List<SalonLayoutResponse>> getLayouts(@PathVariable Long id) {
+        return ResponseEntity.ok(salonService.getLayouts(id));
     }
 
-    @PostMapping("/{id}/layout")
+    @PostMapping("/{id}/layouts")
     @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
-    public ResponseEntity<SalonLayoutResponse> saveLayout(@PathVariable Long id, Authentication authentication) {
-        return ResponseEntity.ok(salonService.saveLayout(id, authentication.getName()));
+    public ResponseEntity<SalonLayoutResponse> saveLayout(
+            @PathVariable Long id, @RequestBody SalonLayoutRequest request, Authentication authentication) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(salonService.saveLayout(id, request, authentication.getName()));
     }
 
-    @PostMapping("/{id}/layout/apply")
+    @PatchMapping("/{id}/layouts/{layoutId}")
     @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
-    public ResponseEntity<Void> applyLayout(@PathVariable Long id) {
-        salonService.applyLayout(id);
+    public ResponseEntity<SalonLayoutResponse> renameLayout(
+            @PathVariable Long id, @PathVariable Long layoutId, @RequestBody SalonLayoutRequest request) {
+        return ResponseEntity.ok(salonService.renameLayout(id, layoutId, request));
+    }
+
+    @DeleteMapping("/{id}/layouts/{layoutId}")
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    public ResponseEntity<Void> deleteLayout(@PathVariable Long id, @PathVariable Long layoutId) {
+        salonService.deleteLayout(id, layoutId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/layouts/{layoutId}/apply")
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    public ResponseEntity<Void> applyLayout(@PathVariable Long id, @PathVariable Long layoutId) {
+        salonService.applyLayout(id, layoutId);
         return ResponseEntity.noContent().build();
     }
 }

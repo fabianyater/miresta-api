@@ -13,9 +13,13 @@ public interface ISalonService {
 
     void deleteSalon(Long id);
 
-    SalonLayoutResponse getLayout(Long salonId);
+    List<SalonLayoutResponse> getLayouts(Long salonId);
 
-    SalonLayoutResponse saveLayout(Long salonId, String actingUserEmail);
+    SalonLayoutResponse saveLayout(Long salonId, SalonLayoutRequest request, String actingUserEmail);
 
-    void applyLayout(Long salonId);
+    SalonLayoutResponse renameLayout(Long salonId, Long layoutId, SalonLayoutRequest request);
+
+    void deleteLayout(Long salonId, Long layoutId);
+
+    void applyLayout(Long salonId, Long layoutId);
 }
