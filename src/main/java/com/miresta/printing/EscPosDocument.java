@@ -19,19 +19,26 @@ public class EscPosDocument {
 
     private static final Charset PRINTER_CHARSET = Charset.forName("ISO-8859-1");
 
-    /** Ancho útil en caracteres de una impresora térmica de 58mm con la fuente A. */
-    public static final int WIDTH = 32;
+    /** Ancho útil por defecto en caracteres — impresora térmica de 58mm con la fuente A. */
+    public static final int DEFAULT_WIDTH = 32;
 
     public record Line(String text, boolean bold, boolean center, boolean rule, boolean big) {
     }
 
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
     private final List<Line> lines = new ArrayList<>();
+    private final int width;
 
     private boolean boldOn = false;
     private boolean centerOn = false;
 
     public EscPosDocument() {
+        this(DEFAULT_WIDTH);
+    }
+
+    /** @param width Ancho útil en caracteres — 32 para papel de 58mm, 48 para 80mm. */
+    public EscPosDocument(int width) {
+        this.width = width;
         out.writeBytes(new byte[]{0x1B, 0x40}); // ESC @ — initialize
     }
 
@@ -83,7 +90,7 @@ public class EscPosDocument {
     public EscPosDocument row(String left, String right) {
         String l = left == null ? "" : left;
         String r = right == null ? "" : right;
-        int gap = WIDTH - l.length() - r.length();
+        int gap = width - l.length() - r.length();
         return line(gap > 0 ? l + " ".repeat(gap) + r : l + " " + r);
     }
 
@@ -92,7 +99,7 @@ public class EscPosDocument {
     }
 
     public EscPosDocument rule() {
-        line("-".repeat(WIDTH));
+        line("-".repeat(width));
         lines.set(lines.size() - 1, new Line("", boldOn, centerOn, true, false));
         return this;
     }
@@ -104,9 +111,13 @@ public class EscPosDocument {
         return this;
     }
 
-    public EscPosDocument cut() {
+    /** Alimenta papel para poder rasgarlo y, si {@code autoCut} está activo, además
+     * manda el comando de corte — algunas impresoras (sin cuchilla) no lo soportan. */
+    public EscPosDocument cut(boolean autoCut) {
         feed(3);
-        out.writeBytes(new byte[]{0x1D, 0x56, 0x00}); // GS V 0 — full cut
+        if (autoCut) {
+            out.writeBytes(new byte[]{0x1D, 0x56, 0x00}); // GS V 0 — full cut
+        }
         return this;
     }
 

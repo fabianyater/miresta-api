@@ -16,6 +16,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -34,9 +35,6 @@ public class TicketService {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter HOUR_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-
-    private static final String RESTAURANT_LINE_1 = "Restaurante Tradición";
-    private static final String RESTAURANT_LINE_2 = "Leña y Carbón";
 
     // Orden de impresión de un plato — sopas primero, luego principios, proteínas,
     // acompañantes y el resto (adicionales/bebidas/especiales) al final, sin importar
@@ -75,12 +73,12 @@ public class TicketService {
     /** Comanda de cocina — sin precios, con el mesero, la mesa y el detalle de cada plato. */
     public TicketPreviewResponse printComanda(Long orderId) {
         Order order = getOrder(orderId);
+        PrinterSettingResponse settings = printerSettingService.get();
 
-        EscPosDocument doc = new EscPosDocument().left();
+        EscPosDocument doc = newDocument(settings).left();
         doc.title("Comanda #" + order.getId());
         doc.blankLine();
-        doc.line(RESTAURANT_LINE_1);
-        doc.line(RESTAURANT_LINE_2);
+        header(doc, settings);
         doc.line(DATE_TIME_FORMAT.format(order.getCreatedAt().atZone(BOGOTA)));
         doc.line(tableLabel(order));
         doc.rule();
@@ -109,7 +107,7 @@ public class TicketService {
             doc.blankLine();
         }
 
-        doc.rule().cut();
+        doc.rule().cut(settings.autoCut());
         return finish("Comanda", doc);
     }
 
@@ -118,11 +116,11 @@ public class TicketService {
     public TicketPreviewResponse printCuenta(Long orderId) {
         Order order = getOrder(orderId);
         List<OrderPaymentResponse> payments = mapPayments(order.getId());
+        PrinterSettingResponse settings = printerSettingService.get();
 
-        EscPosDocument doc = new EscPosDocument().center();
+        EscPosDocument doc = newDocument(settings).center();
         doc.title("RECIBO DE PAGO");
-        doc.line(RESTAURANT_LINE_1);
-        doc.line(RESTAURANT_LINE_2);
+        header(doc, settings);
         doc.blankLine();
 
         doc.left();
@@ -162,19 +160,22 @@ public class TicketService {
             }
         }
 
-        doc.blankLine();
-        doc.center().line("¡Gracias por su visita!");
-        doc.cut();
+        if (settings.footerMessage() != null) {
+            doc.blankLine();
+            doc.center().line(settings.footerMessage());
+        }
+        doc.cut(settings.autoCut());
 
         return finish("Recibo de pago", doc);
     }
 
     public TicketPreviewResponse printResumenDelDia(LocalDate date) {
         var totals = orderService.getPaymentTotals(date);
+        PrinterSettingResponse settings = printerSettingService.get();
 
-        EscPosDocument doc = new EscPosDocument().center();
+        EscPosDocument doc = newDocument(settings).center();
         doc.title("RESUMEN DEL DÍA");
-        doc.line(RESTAURANT_LINE_1);
+        doc.line(settings.headerLine1());
         doc.line(date.format(DATE_FORMAT));
         doc.blankLine();
         doc.left().rule();
@@ -191,9 +192,51 @@ public class TicketService {
         doc.rule();
         doc.row("Pedidos", String.valueOf(orderCount));
         doc.bold(true).row("TOTAL", money(Money.of(grandTotal))).bold(false);
-        doc.cut();
+        doc.cut(settings.autoCut());
 
         return finish("Resumen del día", doc);
+    }
+
+    /** Ticket corto para confirmar, sin armar un pedido real, que la impresora
+     * configurada responde y que el encabezado/ancho/corte se ven como se espera. */
+    public TicketPreviewResponse printTestTicket() {
+        PrinterSettingResponse settings = printerSettingService.get();
+
+        EscPosDocument doc = newDocument(settings).center();
+        doc.title("Ticket de prueba");
+        header(doc, settings);
+        doc.blankLine();
+        doc.line(DATE_TIME_FORMAT.format(Instant.now().atZone(BOGOTA)));
+        doc.rule();
+        doc.left();
+        doc.line("Si puedes leer esto completo");
+        doc.line("y parejo, la impresora quedó");
+        doc.line("bien configurada.");
+        doc.rule();
+        doc.line("Ancho: " + settings.paperWidthChars() + " caracteres");
+        doc.line("Corte automático: " + (settings.autoCut() ? "sí" : "no"));
+        doc.line("Reintentos: " + settings.retryCount());
+        if (settings.footerMessage() != null) {
+            doc.blankLine();
+            doc.center().line(settings.footerMessage());
+        }
+        doc.cut(settings.autoCut());
+
+        return finish("Ticket de prueba", doc);
+    }
+
+    private EscPosDocument newDocument(PrinterSettingResponse settings) {
+        return new EscPosDocument(settings.paperWidthChars());
+    }
+
+    private void header(EscPosDocument doc, PrinterSettingResponse settings) {
+        doc.line(settings.headerLine1());
+        if (settings.headerLine2() != null) {
+            doc.line(settings.headerLine2());
+        }
+        if (settings.addressLine() != null) {
+            doc.line(settings.addressLine());
+        }
     }
 
     /**
