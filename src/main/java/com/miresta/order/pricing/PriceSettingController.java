@@ -11,12 +11,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/price-settings")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+@PreAuthorize("@access.has('PRECIOS_EDITAR')")
 public class PriceSettingController {
 
     private final PriceSettingService priceSettingService;
 
     @GetMapping
+    @PreAuthorize("@access.has('PRECIOS_VER')")
     public ResponseEntity<List<PriceSettingResponse>> getAll() {
         return ResponseEntity.ok(priceSettingService.getAll());
     }
@@ -28,6 +29,7 @@ public class PriceSettingController {
     }
 
     @GetMapping("/{code}/history")
+    @PreAuthorize("@access.has('PRECIOS_VER')")
     public ResponseEntity<List<PriceSettingHistoryResponse>> history(@PathVariable PriceCode code) {
         return ResponseEntity.ok(priceSettingService.getHistory(code));
     }

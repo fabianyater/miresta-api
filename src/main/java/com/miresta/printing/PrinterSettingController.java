@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/printer-setting")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+@PreAuthorize("@access.has('IMPRESORA_CONFIG')")
 public class PrinterSettingController {
 
     private final PrinterSettingService printerSettingService;

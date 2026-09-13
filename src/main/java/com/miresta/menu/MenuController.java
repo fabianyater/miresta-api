@@ -16,7 +16,7 @@ class MenuController {
     private final MenuServiceImpl menuService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('MENU_EDITAR')")
     public ResponseEntity<Void> createMenu(@RequestBody CreateMenuRequest menuRequest) {
         menuService.createMenu(menuRequest);
 
@@ -24,7 +24,7 @@ class MenuController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('MENU_VER')")
     public ResponseEntity<List<MenuResponse>> getMenus(
             @RequestParam(value = "date", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -34,7 +34,7 @@ class MenuController {
     }
 
     @DeleteMapping
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('MENU_EDITAR')")
     public ResponseEntity<Void> deleteMenu(
             @RequestParam("date")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)

@@ -12,7 +12,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+@PreAuthorize("@access.has('USUARIOS_EDITAR')")
 class UserController {
     private final IUserService userService;
 
@@ -24,6 +24,7 @@ class UserController {
     }
 
     @GetMapping
+    @PreAuthorize("@access.has('USUARIOS_VER')")
     public ResponseEntity<List<UserResponse>> getUsers() {
         return ResponseEntity.ok(userService.getUsers());
     }

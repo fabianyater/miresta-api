@@ -15,13 +15,13 @@ public class KitchenPhraseController {
     private final KitchenPhraseService service;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('MESERO', 'ADMIN', 'OWNER')")
+    @PreAuthorize("@access.has('COCINA_VER')")
     public ResponseEntity<List<String>> list() {
         return ResponseEntity.ok(service.list());
     }
 
     @PutMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("@access.has('COCINA_FRASES_EDITAR')")
     public ResponseEntity<List<String>> replace(@RequestBody KitchenPhrasesRequest request) {
         return ResponseEntity.ok(service.replace(request.phrases()));
     }

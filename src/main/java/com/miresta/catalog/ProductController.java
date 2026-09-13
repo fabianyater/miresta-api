@@ -15,7 +15,7 @@ class ProductController {
     private final ProductServiceImpl productService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_EDITAR')")
     public ResponseEntity<ProductRequest> getProducts(@RequestBody ProductRequest productRequest) {
         productService.createProduct(productRequest);
 
@@ -25,44 +25,44 @@ class ProductController {
     // Reads: mesero also needs these to take orders (see the day's menu, product names,
     // etc.) — only creating/editing/deleting the catalog stays admin-only below.
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     public ResponseEntity<List<ProductInfo>> getProducts() {
         return ResponseEntity.ok(productService.getProducts());
     }
 
     @GetMapping("/details")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     public ResponseEntity<List<ProductWithDetails>> getProductsWithDetails() {
         return ResponseEntity.ok(productService.getProductsWithDetails());
     }
 
     @GetMapping("/category")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     public ResponseEntity<List<ProductWithDetails>> getProductsByCategory() {
         return ResponseEntity.ok(productService.getProductsByCategory());
     }
 
     @GetMapping("/common")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     public ResponseEntity<List<ProductInfo>> getAdditionalCommonProducts() {
         return ResponseEntity.ok(productService.getAdditionalCommonProducts());
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     public ResponseEntity<ProductDetailResponse> getProduct(@PathVariable Long id) {
         return ResponseEntity.ok(productService.getProductDetail(id));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_EDITAR')")
     public ResponseEntity<ProductDetailResponse> updateProduct(
             @PathVariable Long id, @RequestBody UpdateProductRequest request) {
         return ResponseEntity.ok(productService.updateProduct(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_EDITAR')")
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();

@@ -16,7 +16,7 @@ class PaymentTypeController {
     private final IPaymentTypeService paymentTypeService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_CREAR')")
     public ResponseEntity<List<PaymentTypeResponse>> getPaymentTypes() {
         return ResponseEntity.ok(paymentTypeService.getPaymentTypes());
     }

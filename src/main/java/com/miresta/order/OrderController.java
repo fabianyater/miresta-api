@@ -18,14 +18,14 @@ public class OrderController {
     private final IOrderService orderService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_CREAR')")
     public ResponseEntity<Void> createOrder(@RequestBody CreateOrderRequest request) {
         orderService.createOrder(request);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_CREAR')")
     public ResponseEntity<List<OrdersResponse>> getOrders(
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "customerId", required = false) Long customerId
@@ -34,28 +34,28 @@ public class OrderController {
     }
 
     @GetMapping("/history")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_CREAR')")
     public ResponseEntity<List<OrdersResponse>> getOrderHistory(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(orderService.getOrderHistory(date));
     }
 
     @GetMapping("/{orderId}")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_CREAR')")
     public ResponseEntity<OrderDetailsResponse> getOrderDetails(@PathVariable Long orderId) {
         OrderDetailsResponse orderDetail = orderService.getOrderDetail(orderId);
         return ResponseEntity.ok(orderDetail);
     }
 
     @GetMapping("/pending/{tableId}")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_CREAR')")
     public ResponseEntity<OrderDetailsResponse> getPendingOrderDetails(@PathVariable Long tableId) {
         OrderDetailsResponse orderDetail = orderService.getPendingOrderDetail(tableId);
         return ResponseEntity.ok(orderDetail);
     }
 
     @PatchMapping("/{orderId}/status")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_CREAR')")
     public ResponseEntity<PaymentResultResponse> updateOrderStatus(
             @RequestBody UpdateStatusRequest request,
             @PathVariable Long orderId) {
@@ -63,48 +63,48 @@ public class OrderController {
     }
 
     @GetMapping("/reports/payment-totals")
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_REPORTES')")
     public ResponseEntity<List<PaymentTotalResponse>> getPaymentTotals(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(orderService.getPaymentTotals(date));
     }
 
     @GetMapping("/reports/daily")
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_REPORTES')")
     public ResponseEntity<DailyReportResponse> getDailyReport(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(orderService.getDailyReport(date));
     }
 
     @PatchMapping("/{orderId}/pay")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_COBRAR')")
     public ResponseEntity<PaymentResultResponse> payOrder(
             @PathVariable Long orderId, @RequestBody PayOrderRequest request) {
         return ResponseEntity.ok(orderService.payOrder(orderId, request.payments()));
     }
 
     @PatchMapping("/{orderId}/fiar-cliente")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_COBRAR')")
     public ResponseEntity<OrderDetailsResponse> fiarCliente(
             @PathVariable Long orderId, @RequestBody FiarClienteRequest request) {
         return ResponseEntity.ok(orderService.fiarCliente(orderId, request.customerId()));
     }
 
     @PostMapping("/customers/{customerId}/settle")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_COBRAR')")
     public ResponseEntity<SettleTabResponse> settleCustomerTab(
             @PathVariable Long customerId, @RequestBody SettleTabRequest request) {
         return ResponseEntity.ok(orderService.settleCustomerTab(customerId, request.paymentTypeId()));
     }
 
     @GetMapping("/customers/balances")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_COBRAR')")
     public ResponseEntity<List<CustomerBalanceResponse>> getCustomerBalances() {
         return ResponseEntity.ok(orderService.getCustomerBalances());
     }
 
     @GetMapping("/customers/{customerId}/payments")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('PEDIDOS_COBRAR')")
     public ResponseEntity<List<CustomerPaymentResponse>> getCustomerPayments(@PathVariable Long customerId) {
         return ResponseEntity.ok(orderService.getCustomerPayments(customerId));
     }

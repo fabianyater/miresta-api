@@ -11,11 +11,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/categories")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+@PreAuthorize("@access.has('CATALOGO_EDITAR')")
 public class CategoryController {
     private final ICategoryService categoryService;
 
-    @PreAuthorize("hasAnyRole('MESERO', 'ADMIN', 'OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     @GetMapping
     public ResponseEntity<List<CategoryResponse>> getCategories() {
         return new ResponseEntity<>(categoryService.getCategories(), HttpStatus.OK);

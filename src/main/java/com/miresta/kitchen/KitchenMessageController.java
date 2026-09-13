@@ -14,7 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/kitchen/messages")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('MESERO', 'ADMIN', 'OWNER')")
+@PreAuthorize("@access.has('COCINA_VER')")
 public class KitchenMessageController {
 
     private final KitchenMessageService service;

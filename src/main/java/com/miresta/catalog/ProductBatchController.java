@@ -18,32 +18,32 @@ class ProductBatchController {
     // Mesero también necesita saber cuánto queda mientras toma el pedido — solo
     // registrar/eliminar lotes queda restringido a administración, más abajo.
     @GetMapping("/api/v1/products/stock")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     public ResponseEntity<Map<Long, Long>> getStock() {
         return ResponseEntity.ok(productBatchService.getRemainingByProduct());
     }
 
     @GetMapping("/api/v1/products/nearest-expiration")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     public ResponseEntity<Map<Long, LocalDate>> getNearestExpiration() {
         return ResponseEntity.ok(productBatchService.getNearestExpirationByProduct());
     }
 
     @GetMapping("/api/v1/products/{productId}/batches")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_VER')")
     public ResponseEntity<List<ProductBatchResponse>> getBatches(@PathVariable Long productId) {
         return ResponseEntity.ok(productBatchService.getBatches(productId));
     }
 
     @PostMapping("/api/v1/products/{productId}/batches")
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_EDITAR')")
     public ResponseEntity<ProductBatchResponse> addBatch(
             @PathVariable Long productId, @RequestBody ProductBatchRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(productBatchService.addBatch(productId, request));
     }
 
     @DeleteMapping("/api/v1/products/batches/{batchId}")
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('CATALOGO_EDITAR')")
     public ResponseEntity<Void> deleteBatch(@PathVariable Long batchId) {
         productBatchService.deleteBatch(batchId);
         return ResponseEntity.noContent().build();

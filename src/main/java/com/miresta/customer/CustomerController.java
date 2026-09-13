@@ -15,13 +15,13 @@ class CustomerController {
     private final ICustomerService customerService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CLIENTES_VER')")
     public ResponseEntity<CustomerResponse> createCustomer(@RequestBody CustomerRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(customerService.createCustomer(request));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CLIENTES_VER')")
     public ResponseEntity<List<CustomerResponse>> getCustomers(
             @RequestParam(value = "phone", required = false) String phone) {
         if (phone != null && !phone.isBlank()) {
@@ -31,20 +31,20 @@ class CustomerController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    @PreAuthorize("@access.has('CLIENTES_VER')")
     public ResponseEntity<CustomerResponse> getCustomer(@PathVariable Long id) {
         return ResponseEntity.ok(customerService.getCustomerResponseById(id));
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('CLIENTES_EDITAR')")
     public ResponseEntity<CustomerResponse> updateCustomer(
             @PathVariable Long id, @RequestBody UpdateCustomerRequest request) {
         return ResponseEntity.ok(customerService.updateCustomer(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @PreAuthorize("@access.has('CLIENTES_EDITAR')")
     public ResponseEntity<Void> deleteCustomer(@PathVariable Long id) {
         customerService.deleteCustomer(id);
         return ResponseEntity.noContent().build();
