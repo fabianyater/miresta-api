@@ -1,12 +1,14 @@
 package com.miresta.table;
 
+import com.miresta.auth.User;
+import com.miresta.auth.UserRepository;
 import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
+import java.time.Instant;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -15,6 +17,8 @@ public class SalonServiceImpl implements ISalonService {
 
     private final SalonRepository salonRepository;
     private final DiningTableRepository diningTableRepository;
+    private final SalonLayoutRepository salonLayoutRepository;
+    private final UserRepository userRepository;
 
     @Override
     public List<SalonResponse> getSalons() {
@@ -85,6 +89,72 @@ public class SalonServiceImpl implements ISalonService {
             throw new IllegalStateException("Este salón tiene mesas — muévelas a otro salón o elimínalas primero.");
         }
         salonRepository.delete(salon);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public SalonLayoutResponse getLayout(Long salonId) {
+        getSalonOrThrow(salonId);
+        return salonLayoutRepository.findBySalon_Id(salonId).map(this::toLayoutResponse).orElse(null);
+    }
+
+    /** Guarda (o sobreescribe) la foto de dónde está cada mesa de este salón ahora mismo. */
+    @Transactional
+    @Override
+    public SalonLayoutResponse saveLayout(Long salonId, String actingUserEmail) {
+        Salon salon = getSalonOrThrow(salonId);
+        List<DiningTable> tables = diningTableRepository.findBySalon_Id(salonId);
+
+        SalonLayout layout = salonLayoutRepository.findBySalon_Id(salonId).orElseGet(() -> {
+            SalonLayout created = new SalonLayout();
+            created.setSalon(salon);
+            return created;
+        });
+        layout.setSavedAt(Instant.now());
+        layout.setSavedBy(resolveName(actingUserEmail));
+        layout.getPositions().clear();
+        for (DiningTable table : tables) {
+            SalonLayoutPosition position = new SalonLayoutPosition();
+            position.setLayout(layout);
+            position.setTable(table);
+            position.setPositionX(table.getPositionX());
+            position.setPositionY(table.getPositionY());
+            layout.getPositions().add(position);
+        }
+
+        return toLayoutResponse(salonLayoutRepository.save(layout));
+    }
+
+    /** Copia las posiciones guardadas a las mesas reales — una mesa que ya no esté en
+     * este salón (se movió a otro después de guardar) se deja como está. */
+    @Transactional
+    @Override
+    public void applyLayout(Long salonId) {
+        getSalonOrThrow(salonId);
+        SalonLayout layout = salonLayoutRepository.findBySalon_Id(salonId)
+                .orElseThrow(() -> new IllegalStateException("Este salón no tiene un plano guardado todavía."));
+
+        for (SalonLayoutPosition position : layout.getPositions()) {
+            DiningTable table = position.getTable();
+            if (!table.getSalon().getId().equals(salonId)) {
+                continue;
+            }
+            table.setPositionX(position.getPositionX());
+            table.setPositionY(position.getPositionY());
+            diningTableRepository.save(table);
+        }
+    }
+
+    private String resolveName(String email) {
+        return userRepository.findByEmail(email)
+                .map(User::getDisplayName)
+                .filter(name -> name != null && !name.isBlank())
+                .orElse(email);
+    }
+
+    private SalonLayoutResponse toLayoutResponse(SalonLayout layout) {
+        return new SalonLayoutResponse(
+                layout.getSalon().getId(), layout.getSavedAt(), layout.getSavedBy(), layout.getPositions().size());
     }
 
     private Salon getSalonOrThrow(Long id) {

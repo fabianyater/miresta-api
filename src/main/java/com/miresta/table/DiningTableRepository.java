@@ -26,6 +26,8 @@ public interface DiningTableRepository extends JpaRepository<DiningTable, Long> 
 
     long countBySalon_Id(Long salonId);
 
+    List<DiningTable> findBySalon_Id(Long salonId);
+
     @Query("""
         select\s
             sum(case when s.name = 'OPEN' then 1 else 0 end),

@@ -12,4 +12,10 @@ public interface ISalonService {
     SalonResponse moveSalon(Long id, String direction);
 
     void deleteSalon(Long id);
+
+    SalonLayoutResponse getLayout(Long salonId);
+
+    SalonLayoutResponse saveLayout(Long salonId, String actingUserEmail);
+
+    void applyLayout(Long salonId);
 }
