@@ -17,16 +17,21 @@ public interface DiningTableRepository extends JpaRepository<DiningTable, Long> 
 
     @Query("""
         select new com.miresta.table.TableEntityDto(
-            t.id, t.number, s.name, sal.id, sal.name, t.positionX, t.positionY)
+            t.id, t.number, s.name, sal.id, sal.name, t.positionX, t.positionY, m.id)
         from DiningTable t
         join t.status s
         join t.salon sal
+        left join t.mergedInto m
     """)
     List<TableEntityDto> findAllAsDto();
 
     long countBySalon_Id(Long salonId);
 
     List<DiningTable> findBySalon_Id(Long salonId);
+
+    List<DiningTable> findByMergedInto_Id(Long primaryId);
+
+    boolean existsByMergedInto_Id(Long primaryId);
 
     @Query("""
         select\s

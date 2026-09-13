@@ -36,6 +36,12 @@ public class DiningTable {
     @Column(name = "position_y", nullable = false)
     private float positionY;
 
+    /** Si no es null, esta mesa está "unida" a otra — el pedido/cuenta corre por la
+     * mesa principal, esta no genera uno propio mientras dure el grupo. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "merged_into_id")
+    private DiningTable mergedInto;
+
     @OneToMany(mappedBy = "diningTable")
     private Set<Order> orders = new LinkedHashSet<>();
 }

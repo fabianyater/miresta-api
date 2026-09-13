@@ -43,4 +43,21 @@ class TableController {
         tableServiceImpl.deleteTable(id);
         return ResponseEntity.noContent().build();
     }
+
+    // El mesero es quien de verdad junta mesas para un grupo grande — a diferencia
+    // del resto de la administración de mesas (crear, mover de salón, borrar), esto
+    // no queda solo para Admin/Owner.
+    @PostMapping("/{primaryId}/merge")
+    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    public ResponseEntity<Void> mergeTables(@PathVariable Long primaryId, @RequestBody MergeTablesRequest request) {
+        tableServiceImpl.mergeTables(primaryId, request.tableIds());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{primaryId}/unmerge")
+    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    public ResponseEntity<Void> unmergeTables(@PathVariable Long primaryId) {
+        tableServiceImpl.unmergeTables(primaryId);
+        return ResponseEntity.noContent().build();
+    }
 }

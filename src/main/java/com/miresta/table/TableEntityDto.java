@@ -12,5 +12,7 @@ public record TableEntityDto(
         Long salonId,
         String salonName,
         float positionX,
-        float positionY) implements Serializable {
+        float positionY,
+        /** Null si es libre o es ella misma la principal de su grupo. */
+        Long mergedIntoId) implements Serializable {
 }

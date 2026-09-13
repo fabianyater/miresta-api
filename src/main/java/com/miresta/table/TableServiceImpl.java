@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
@@ -26,18 +28,26 @@ public class TableServiceImpl implements ITableService {
 
     @Override
     public TableSummaryResponse getTablesInfo() {
-        List<TableEntityDto> tables = diningTableRepository.findAllAsDto().stream()
+        List<TableEntityDto> raw = diningTableRepository.findAllAsDto();
+        Map<Long, TableEntityDto> byId = raw.stream()
+                .collect(Collectors.toMap(TableEntityDto::id, dto -> dto));
+
+        // Una mesa unida a otra no tiene pedido propio — su estado real (libre/en
+        // uso) es el de la principal, aunque en la base siga marcada libre.
+        List<TableEntityDto> tables = raw.stream()
+                .map(dto -> {
+                    if (dto.mergedIntoId() == null) return dto;
+                    TableEntityDto primary = byId.get(dto.mergedIntoId());
+                    if (primary == null || primary.status().equals(dto.status())) return dto;
+                    return new TableEntityDto(
+                            dto.id(), dto.number(), primary.status(), dto.salonId(), dto.salonName(),
+                            dto.positionX(), dto.positionY(), dto.mergedIntoId());
+                })
                 .sorted(Comparator.comparing(TableEntityDto::number))
                 .toList();
-        Object result = diningTableRepository.countAllStatuses();
 
-        long free = 0L;
-        long inUse = 0L;
-
-        if (result instanceof Object[] row) {
-            free = (row[0] != null) ? ((Number) row[0]).longValue() : 0L;
-            inUse = (row[1] != null) ? ((Number) row[1]).longValue() : 0L;
-        }
+        long free = tables.stream().filter(t -> "OPEN".equals(t.status())).count();
+        long inUse = tables.stream().filter(t -> "IN_USE".equals(t.status())).count();
 
         return new TableSummaryResponse(tables, free, inUse);
     }
@@ -50,6 +60,52 @@ public class TableServiceImpl implements ITableService {
         diningTable.setStatus(diningTableStatus);
 
         diningTableRepository.save(diningTable);
+
+        // Al liberar una mesa que era ancla de un grupo unido, el grupo se disuelve
+        // solo — ya no hay una cuenta compartida corriendo.
+        if ("OPEN".equals(status)) {
+            unmergeTables(diningTable.getId());
+        }
+    }
+
+    @Transactional
+    @Override
+    public void mergeTables(Long primaryId, List<Long> tableIds) {
+        if (tableIds == null || tableIds.isEmpty()) {
+            throw new IllegalArgumentException("Selecciona al menos una mesa para unir.");
+        }
+        DiningTable primary = getTableOrThrow(primaryId);
+        if (primary.getMergedInto() != null) {
+            throw new IllegalStateException("Esa mesa ya está unida a otra — sepárala primero.");
+        }
+        if (!"OPEN".equals(primary.getStatus().getName())) {
+            throw new IllegalStateException("Solo se pueden unir mesas libres.");
+        }
+
+        for (Long id : tableIds) {
+            if (id.equals(primaryId)) continue;
+            DiningTable table = getTableOrThrow(id);
+            if (!"OPEN".equals(table.getStatus().getName())) {
+                throw new IllegalStateException("La mesa " + table.getNumber() + " no está libre.");
+            }
+            if (table.getMergedInto() != null) {
+                throw new IllegalStateException("La mesa " + table.getNumber() + " ya está unida a otra.");
+            }
+            if (diningTableRepository.existsByMergedInto_Id(id)) {
+                throw new IllegalStateException("La mesa " + table.getNumber() + " ya es principal de otro grupo.");
+            }
+            table.setMergedInto(primary);
+            diningTableRepository.save(table);
+        }
+    }
+
+    @Transactional
+    @Override
+    public void unmergeTables(Long primaryId) {
+        for (DiningTable member : diningTableRepository.findByMergedInto_Id(primaryId)) {
+            member.setMergedInto(null);
+            diningTableRepository.save(member);
+        }
     }
 
     @Transactional
@@ -134,6 +190,9 @@ public class TableServiceImpl implements ITableService {
         if ("IN_USE".equals(table.getStatus().getName())) {
             throw new IllegalStateException("No se puede eliminar una mesa en uso");
         }
+        if (table.getMergedInto() != null || diningTableRepository.existsByMergedInto_Id(id)) {
+            throw new IllegalStateException("No se puede eliminar una mesa unida a otra — sepárala primero.");
+        }
 
         try {
             diningTableRepository.delete(table);
@@ -146,6 +205,11 @@ public class TableServiceImpl implements ITableService {
     private Salon getSalonOrThrow(Long salonId) {
         return salonRepository.findById(salonId)
                 .orElseThrow(() -> new EntityNotFoundException("Salón no encontrado: " + salonId));
+    }
+
+    private DiningTable getTableOrThrow(Long id) {
+        return diningTableRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Mesa no encontrada: " + id));
     }
 
     private float[] nextGridPosition(Long salonId) {
@@ -169,6 +233,7 @@ public class TableServiceImpl implements ITableService {
                 table.getSalon().getId(),
                 table.getSalon().getName(),
                 table.getPositionX(),
-                table.getPositionY());
+                table.getPositionY(),
+                table.getMergedInto() != null ? table.getMergedInto().getId() : null);
     }
 }
