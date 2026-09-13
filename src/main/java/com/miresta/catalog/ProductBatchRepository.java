@@ -23,4 +23,11 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, Long
     @Query("select b.product.id as productId, coalesce(sum(b.quantityRemaining), 0) as remaining " +
             "from ProductBatch b group by b.product.id")
     List<ProductRemainingProjection> sumRemainingGroupedByProduct();
+
+    /** Para el badge "Vence..." en la card del catálogo — el lote que primero vence entre
+     * los que todavía tienen existencias (uno agotado no importa si está por vencer). */
+    @Query("select b.product.id as productId, min(b.expirationDate) as expirationDate " +
+            "from ProductBatch b where b.quantityRemaining > 0 and b.expirationDate is not null " +
+            "group by b.product.id")
+    List<ProductNearestExpirationProjection> nearestExpirationGroupedByProduct();
 }

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -52,6 +53,14 @@ public class ProductBatchServiceImpl implements IProductBatchService {
     public Map<Long, Long> getRemainingByProduct() {
         return productBatchRepository.sumRemainingGroupedByProduct().stream()
                 .collect(Collectors.toMap(ProductRemainingProjection::getProductId, ProductRemainingProjection::getRemaining));
+    }
+
+    @Override
+    public Map<Long, LocalDate> getNearestExpirationByProduct() {
+        return productBatchRepository.nearestExpirationGroupedByProduct().stream()
+                .collect(Collectors.toMap(
+                        ProductNearestExpirationProjection::getProductId,
+                        ProductNearestExpirationProjection::getExpirationDate));
     }
 
     @Transactional

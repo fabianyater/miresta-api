@@ -1,5 +1,6 @@
 package com.miresta.catalog;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -13,6 +14,10 @@ public interface IProductBatchService {
     /** productId -> cuánto queda sumando todos sus lotes. Solo incluye productos que
      * tienen al menos un lote registrado — el resto no se rastrea así. */
     Map<Long, Long> getRemainingByProduct();
+
+    /** productId -> fecha de vencimiento más próxima entre los lotes con existencias.
+     * Solo incluye productos con al menos un lote con stock y vencimiento registrado. */
+    Map<Long, LocalDate> getNearestExpirationByProduct();
 
     /** No-op si el producto no tiene lotes registrados (no se rastrea por lotes).
      * Si tiene y no alcanza, lanza y deja que la transacción del pedido haga rollback. */

@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -20,6 +21,12 @@ class ProductBatchController {
     @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
     public ResponseEntity<Map<Long, Long>> getStock() {
         return ResponseEntity.ok(productBatchService.getRemainingByProduct());
+    }
+
+    @GetMapping("/api/v1/products/nearest-expiration")
+    @PreAuthorize("hasAnyRole('ADMIN','MESERO','OWNER')")
+    public ResponseEntity<Map<Long, LocalDate>> getNearestExpiration() {
+        return ResponseEntity.ok(productBatchService.getNearestExpirationByProduct());
     }
 
     @GetMapping("/api/v1/products/{productId}/batches")
