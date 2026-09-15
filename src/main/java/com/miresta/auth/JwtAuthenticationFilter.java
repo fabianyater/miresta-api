@@ -29,10 +29,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
+        // EventSource (usado por el stream SSE de stock) no puede mandar headers propios
+        // — para esa única ruta se acepta el token también por query param.
+        String token = header != null && header.startsWith("Bearer ")
+                ? header.substring(7)
+                : request.getParameter("access_token");
 
-        if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
-
+        if (token != null) {
             try {
                 var claims = jwtService.parseClaims(token);
                 String email = claims.getSubject();

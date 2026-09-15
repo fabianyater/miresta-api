@@ -3,6 +3,7 @@ package com.miresta.menu;
 import com.miresta.catalog.Product;
 import com.miresta.catalog.ProductServiceImpl;
 import com.miresta.catalog.ProductWithIdAndQuantity;
+import com.miresta.shared.StockEventBroadcaster;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import java.util.stream.Collectors;
 public class MenuItemServiceImpl implements IMenuItemService {
     private final MenuItemRepository menuItemRepository;
     private final ProductServiceImpl productService;
+    private final StockEventBroadcaster stockEventBroadcaster;
 
     @Override
     public void createMenuItem(MenuOffering menuOffering, ProductWithIdAndQuantity productWithIdAndQuantity) {
@@ -66,6 +68,8 @@ public class MenuItemServiceImpl implements IMenuItemService {
         // took it off, so it's fine to drop (nothing to preserve for a product that's
         // not being offered anymore).
         existingByProduct.values().forEach(menuItemRepository::delete);
+
+        stockEventBroadcaster.notifyStockChanged();
     }
 
     @Transactional
@@ -79,6 +83,7 @@ public class MenuItemServiceImpl implements IMenuItemService {
                         throw new IllegalStateException(
                                 "No queda suficiente " + product.getName() + " disponible hoy.");
                     }
+                    stockEventBroadcaster.notifyStockChanged();
                 });
     }
 
@@ -86,6 +91,9 @@ public class MenuItemServiceImpl implements IMenuItemService {
     @Override
     public void restore(MenuOffering menuOffering, Product product, long amount) {
         menuItemRepository.findByMenuOffering_IdAndProduct_Id(menuOffering.getId(), product.getId())
-                .ifPresent(item -> menuItemRepository.restoreQuantity(item.getId(), amount));
+                .ifPresent(item -> {
+                    menuItemRepository.restoreQuantity(item.getId(), amount);
+                    stockEventBroadcaster.notifyStockChanged();
+                });
     }
 }

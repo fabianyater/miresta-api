@@ -1,5 +1,6 @@
 package com.miresta.catalog;
 
+import com.miresta.shared.StockEventBroadcaster;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 public class ProductBatchServiceImpl implements IProductBatchService {
     private final ProductBatchRepository productBatchRepository;
     private final ProductServiceImpl productService;
+    private final StockEventBroadcaster stockEventBroadcaster;
 
     @Transactional
     @Override
@@ -30,7 +32,9 @@ public class ProductBatchServiceImpl implements IProductBatchService {
         batch.setQuantityRemaining(request.quantity());
         batch.setExpirationDate(request.expirationDate());
 
-        return toResponse(productBatchRepository.save(batch));
+        ProductBatchResponse response = toResponse(productBatchRepository.save(batch));
+        stockEventBroadcaster.notifyStockChanged();
+        return response;
     }
 
     @Override
@@ -47,6 +51,7 @@ public class ProductBatchServiceImpl implements IProductBatchService {
             throw new EntityNotFoundException("Lote no encontrado: " + batchId);
         }
         productBatchRepository.deleteById(batchId);
+        stockEventBroadcaster.notifyStockChanged();
     }
 
     @Override
@@ -84,6 +89,7 @@ public class ProductBatchServiceImpl implements IProductBatchService {
             throw new IllegalStateException("No queda suficiente " + product.getName() + " en los lotes registrados.");
         }
         productBatchRepository.saveAll(batches);
+        stockEventBroadcaster.notifyStockChanged();
     }
 
     @Transactional
@@ -111,6 +117,7 @@ public class ProductBatchServiceImpl implements IProductBatchService {
             first.setQuantityRemaining((int) (first.getQuantityRemaining() + remaining));
         }
         productBatchRepository.saveAll(batches);
+        stockEventBroadcaster.notifyStockChanged();
     }
 
     private ProductBatchResponse toResponse(ProductBatch b) {
