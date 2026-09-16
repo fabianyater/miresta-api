@@ -39,11 +39,7 @@ public class StockEventBroadcaster {
 
     public void notifyStockChanged() {
         for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event().name("stock-changed").data("ok"));
-            } catch (IOException | IllegalStateException e) {
-                emitters.remove(emitter);
-            }
+            send(emitter, SseEmitter.event().name("stock-changed").data("ok"));
         }
     }
 
@@ -56,8 +52,19 @@ public class StockEventBroadcaster {
     @Scheduled(fixedRate = 20_000)
     public void heartbeat() {
         for (SseEmitter emitter : emitters) {
+            send(emitter, SseEmitter.event().comment("keep-alive"));
+        }
+    }
+
+    // notifyStockChanged() corre en el hilo que atiende la petición que cambió el
+    // stock; heartbeat() corre en el hilo del scheduler — sin sincronizar por
+    // emitter, ambos podían escribirle al mismo SseEmitter al mismo tiempo (send()
+    // no es thread-safe), corrompiendo ese envío puntual y dejando esa conexión
+    // sorda desde ahí sin que el cliente se entere.
+    private void send(SseEmitter emitter, SseEmitter.SseEventBuilder event) {
+        synchronized (emitter) {
             try {
-                emitter.send(SseEmitter.event().comment("keep-alive"));
+                emitter.send(event);
             } catch (IOException | IllegalStateException e) {
                 emitters.remove(emitter);
             }
