@@ -1,5 +1,6 @@
 package com.miresta.shared;
 
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -40,6 +41,23 @@ public class StockEventBroadcaster {
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event().name("stock-changed").data("ok"));
+            } catch (IOException | IllegalStateException e) {
+                emitters.remove(emitter);
+            }
+        }
+    }
+
+    // Sin esto, una conexión que se queda callada mucho rato (nada cambia en el
+    // stock) puede morir en silencio a mitad de camino — el proxy de Vite, o
+    // cualquier proxy/red intermedio, puede cerrar un socket que lleva minutos sin
+    // bytes — y el navegador no siempre nota que ya no está conectado. Un comentario
+    // SSE cada 20s no dispara ningún evento en el cliente, solo mantiene el socket
+    // con tráfico real para que nadie lo dé por muerto.
+    @Scheduled(fixedRate = 20_000)
+    public void heartbeat() {
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event().comment("keep-alive"));
             } catch (IOException | IllegalStateException e) {
                 emitters.remove(emitter);
             }
