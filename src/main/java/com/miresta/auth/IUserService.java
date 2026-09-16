@@ -9,5 +9,7 @@ public interface IUserService {
 
     UserResponse updateUser(Long id, UpdateUserRequest request, String currentUserEmail);
 
+    UserResponse updateOwnProfile(UpdateOwnProfileRequest request, String currentUserEmail);
+
     void deleteUser(Long id, String currentUserEmail);
 }

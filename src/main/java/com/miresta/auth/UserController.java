@@ -29,6 +29,16 @@ class UserController {
         return ResponseEntity.ok(userService.getUsers());
     }
 
+    // Cualquier usuario autenticado (sin importar rol/permiso) puede editar su propia
+    // info básica — correo, rol y estado activo quedan intocables desde aquí, eso
+    // sigue exigiendo USUARIOS_EDITAR vía el endpoint de abajo.
+    @PatchMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<UserResponse> updateOwnProfile(
+            @RequestBody UpdateOwnProfileRequest request, Authentication authentication) {
+        return ResponseEntity.ok(userService.updateOwnProfile(request, authentication.getName()));
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable Long id, @RequestBody UpdateUserRequest request, Authentication authentication) {

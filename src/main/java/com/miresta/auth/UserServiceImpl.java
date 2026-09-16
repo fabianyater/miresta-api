@@ -111,6 +111,15 @@ public class UserServiceImpl implements IUserService {
 
     @Transactional
     @Override
+    public UserResponse updateOwnProfile(UpdateOwnProfileRequest request, String currentUserEmail) {
+        User self = requireCurrentUser(currentUserEmail);
+        UpdateUserRequest restricted = new UpdateUserRequest(
+                null, request.name(), request.displayName(), request.password(), null, null);
+        return updateUser(self.getId(), restricted, currentUserEmail);
+    }
+
+    @Transactional
+    @Override
     public void deleteUser(Long id, String currentUserEmail) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado: " + id));
