@@ -62,7 +62,19 @@ public class OrderServiceImpl implements IOrderService {
 
         Order savedOrder;
 
-        if (orderRequest.tableId() != null) {
+        if (orderRequest.orderId() != null) {
+            // Agregar más platos a un pedido para llevar que ya está pendiente —
+            // análogo al caso de mesa de abajo, pero encontrado directo por id en vez
+            // de por mesa (un pedido para llevar no tiene mesa que lo identifique).
+            savedOrder = orderRepository.findById(orderRequest.orderId())
+                    .orElseThrow(() -> new EntityNotFoundException("Pedido no encontrado: " + orderRequest.orderId()));
+            if (!"PENDING".equals(savedOrder.getOrderStatus().getName())) {
+                throw new IllegalStateException("Ese pedido ya no está pendiente — no se le puede agregar más.");
+            }
+            if (customer != null) {
+                savedOrder.setCustomer(customer);
+            }
+        } else if (orderRequest.tableId() != null) {
             // Locked, not a plain findById — otherwise two near-simultaneous requests
             // for the same table (two waiters, or a retry) can both see "no pending
             // order yet" before either commits, and each creates its own separate
